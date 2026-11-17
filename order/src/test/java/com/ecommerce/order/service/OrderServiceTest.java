@@ -48,7 +48,7 @@ class OrderServiceTest {
                 .userId(10L)
                 .productId(100L)
                 .quantity(2)
-                .price(new BigDecimal("2000.00"))
+                .price(new BigDecimal("1000.00"))
                 .build();
 
         order = Order.builder()
@@ -100,8 +100,8 @@ class OrderServiceTest {
     }
 
     @Test
-    void placeOrder_shouldCalculateTotalAmountCorrectly() {
-        //given
+    void placeOrder_shouldCalculateTotalAmountFromUnitPriceTimesQuantity() {
+        //given - cart item price is a UNIT price
         Long userId = 10L;
         CartItem item1 = CartItem.builder()
                 .id(1L)
@@ -115,7 +115,7 @@ class OrderServiceTest {
                 .userId(10L)
                 .productId(200L)
                 .quantity(3)
-                .price(new BigDecimal("3000.00"))
+                .price(new BigDecimal("250.00"))
                 .build();
 
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.of(List.of(item1, item2)));
@@ -134,7 +134,8 @@ class OrderServiceTest {
 
         //then
         assertNotNull(result);
-        assertEquals(new BigDecimal("11000.00"), result.getTotalAmount());
+        // 2 x 1000 + 3 x 250
+        assertEquals(new BigDecimal("2750.00"), result.getTotalAmount());
         verify(cartService).clearCart(userId);
     }
 

@@ -9,6 +9,7 @@ import com.ecommerce.order.exception.EmptyCartException;
 import com.ecommerce.order.mapper.OrderResponseMapper;
 import com.ecommerce.order.repository.OrderRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -29,6 +30,7 @@ public class OrderServiceImpl implements OrderService{
     }
 
     @Override
+    @Transactional
     public OrderResponse placeOrder(Long userId) {
         //validate for user
         //User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));

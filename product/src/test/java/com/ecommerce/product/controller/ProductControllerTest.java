@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -274,5 +275,38 @@ class ProductControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Laptop Pro\",\"description\":\"Updated high performance laptop\",\"price\":1099.99,\"category\":\"Electronics\",\"stock\":15,\"image\":\"laptop-pro.jpg\"}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenUpdatingWithMissingRequiredFields() throws Exception {
+        //when & then - only "name" provided: description, price and category are missing
+        mockMvc.perform(put("/api/v1/products/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Laptop Pro\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).updateProduct(any(), any());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenUpdatingWithNegativePrice() throws Exception {
+        //when & then
+        mockMvc.perform(put("/api/v1/products/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Laptop Pro\",\"description\":\"desc\",\"price\":-1,\"category\":\"Electronics\",\"stock\":15}"))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).updateProduct(any(), any());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenCreatingWithNegativePrice() throws Exception {
+        //when & then
+        mockMvc.perform(post("/api/v1/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Laptop\",\"description\":\"desc\",\"price\":-10,\"category\":\"Electronics\",\"stock\":1}"))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).createProduct(any());
     }
 }

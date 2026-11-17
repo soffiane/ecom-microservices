@@ -1,0 +1,9 @@
+# Test profile. Tests run without the config-server, so settings the code relies on
+# must be set here. The MongoDB connection comes from Testcontainers (@ServiceConnection).
+spring:
+  application:
+    name: user-service
+  data:
+    mongodb:
+      # creates the unique index on users.email (@Indexed(unique = true))
+      auto-index-creation: true

@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -236,5 +237,16 @@ class UserControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"firstName\":\"John\",\"lastName\":\"Smith\",\"email\":\"john.smith@example.com\",\"phone\":\"1234567890\",\"role\":\"CUSTOMER\"}"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldReturnBadRequestWhenUpdatingWithInvalidPayload() throws Exception {
+        //when & then - invalid email, missing last name and role
+        mockMvc.perform(put("/api/v1/users/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"firstName\":\"John\",\"email\":\"not-an-email\",\"phone\":\"1234567890\"}"))
+                .andExpect(status().isBadRequest());
+
+        verify(userService, never()).updateUser(any(), any());
     }
 }

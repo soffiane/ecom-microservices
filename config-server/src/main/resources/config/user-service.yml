@@ -8,7 +8,8 @@ spring:
     uri: ${MONGODB_URI:mongodb://localhost:27017/user}
   data:
     mongodb:
-      auto-index-creation: false
+      # required: creates the unique index on users.email declared with @Indexed(unique = true)
+      auto-index-creation: true
 management:
   endpoints:
     web:

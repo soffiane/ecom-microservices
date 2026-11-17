@@ -13,6 +13,9 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Entity
+@Table(uniqueConstraints = @UniqueConstraint(
+        name = "uk_cart_item_user_product",
+        columnNames = {"user_id", "product_id"}))
 @Data
 @Builder
 @AllArgsConstructor

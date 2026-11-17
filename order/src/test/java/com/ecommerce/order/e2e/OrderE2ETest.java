@@ -119,7 +119,7 @@ class OrderE2ETest {
 
         // Verify order created
         assertEquals(1, orderRepository.count());
-        Order order = orderRepository.findAll().get(0);
+        Order order = orderRepository.findAll().getFirst();
         assertEquals(userId, order.getUserId());
         assertEquals(OrderStatus.CONFIRMED, order.getStatus());
         assertTrue(order.getTotalAmount().compareTo(BigDecimal.ZERO) > 0);
@@ -256,6 +256,8 @@ class OrderE2ETest {
         // Verify order has correct total
         Order order = orderRepository.findAll().getFirst();
         assertEquals(1, order.getItems().size());
-        assertEquals(4, order.getItems().get(0).getQuantity());
+        assertEquals(4, order.getItems().getFirst().getQuantity());
+        // 4 x placeholder unit price (1000): quantity must not be applied twice
+        assertEquals(0, new BigDecimal("4000").compareTo(order.getTotalAmount()));
     }
 }

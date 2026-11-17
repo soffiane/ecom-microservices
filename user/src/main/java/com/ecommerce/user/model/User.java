@@ -24,6 +24,7 @@ public class User {
     @Indexed(unique = true)
     private String email;
     private String phone;
+    @Builder.Default
     private UserRole role = UserRole.CUSTOMER;
 
     private Address address;

@@ -170,6 +170,28 @@ class ProductServiceTest {
     }
 
     @Test
+    void updateProduct_shouldKeepExistingStockWhenStockNotProvided() {
+        //given
+        ProductRequest updateRequest = ProductRequest.builder()
+                .name("Laptop Pro")
+                .description("Updated high performance laptop")
+                .price(new BigDecimal("1099.99"))
+                .category("Electronics")
+                .stock(null)
+                .build();
+
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.save(any(Product.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        //when
+        Product result = productService.updateProduct(1L, updateRequest);
+
+        //then
+        assertEquals(10, result.getQuantity());
+        assertEquals("Laptop Pro", result.getName());
+    }
+
+    @Test
     void updateProduct_shouldThrowExceptionWhenNotExists() {
         //given
         ProductRequest updateRequest = ProductRequest.builder()

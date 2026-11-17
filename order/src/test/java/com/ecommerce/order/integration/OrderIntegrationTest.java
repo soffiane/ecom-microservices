@@ -3,15 +3,18 @@ package com.ecommerce.order.integration;
 import com.ecommerce.order.domain.CartItem;
 import com.ecommerce.order.repository.CartItemRepository;
 import com.ecommerce.order.repository.OrderRepository;
+import com.ecommerce.order.service.CartService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -22,7 +25,9 @@ import java.math.BigDecimal;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -54,6 +59,9 @@ class OrderIntegrationTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @MockitoSpyBean
+    private CartService cartService;
 
     @BeforeEach
     void setUp() {
@@ -88,7 +96,8 @@ class OrderIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                .andExpect(jsonPath("$.totalAmount").value(4000));
+                // 2 x placeholder unit price (1000)
+                .andExpect(jsonPath("$.totalAmount").value(2000));
 
         //then - verify order was saved and cart was cleared
         assertEquals(1, orderRepository.count());
@@ -103,7 +112,7 @@ class OrderIntegrationTest {
                 .userId(userId)
                 .productId(100L)
                 .quantity(2)
-                .price(new BigDecimal("2000.00"))
+                .price(new BigDecimal("1000.00"))
                 .build();
         cartItemRepository.save(cartItem);
 
@@ -125,7 +134,7 @@ class OrderIntegrationTest {
                 .userId(userId)
                 .productId(100L)
                 .quantity(2)
-                .price(new BigDecimal("2000.00"))
+                .price(new BigDecimal("1000.00"))
                 .build();
         cartItemRepository.save(cartItem);
 
@@ -157,7 +166,7 @@ class OrderIntegrationTest {
                 .userId(userId)
                 .productId(100L)
                 .quantity(2)
-                .price(new BigDecimal("2000.00"))
+                .price(new BigDecimal("1000.00"))
                 .build();
         cartItemRepository.save(cartItem);
 
@@ -178,5 +187,47 @@ class OrderIntegrationTest {
         //then
         CartItem updatedItem = cartItemRepository.findByUserIdAndProductId(userId, 100L).orElseThrow();
         assertEquals(5, updatedItem.getQuantity());
+        assertEquals(0, new BigDecimal("1000").compareTo(updatedItem.getPrice()));
+    }
+
+    @Test
+    void shouldRollbackOrderWhenClearingCartFails() {
+        //given
+        Long userId = 10L;
+        cartItemRepository.save(CartItem.builder()
+                .userId(userId)
+                .productId(100L)
+                .quantity(2)
+                .price(new BigDecimal("1000.00"))
+                .build());
+        doThrow(new IllegalStateException("simulated failure")).when(cartService).clearCart(userId);
+
+        //when
+        assertThrows(Exception.class, () -> mockMvc.perform(post("/api/v1/orders")
+                .header("X-User-ID", userId)));
+
+        //then - order creation is rolled back and the cart is untouched
+        assertEquals(0, orderRepository.count());
+        assertEquals(1, cartItemRepository.findByUserId(userId).orElseThrow().size());
+    }
+
+    @Test
+    void shouldRejectDuplicateCartLineForSameUserAndProduct() {
+        //given
+        Long userId = 10L;
+        cartItemRepository.save(CartItem.builder()
+                .userId(userId)
+                .productId(100L)
+                .quantity(1)
+                .price(new BigDecimal("1000.00"))
+                .build());
+
+        //when & then
+        assertThrows(DataIntegrityViolationException.class, () -> cartItemRepository.save(CartItem.builder()
+                .userId(userId)
+                .productId(100L)
+                .quantity(1)
+                .price(new BigDecimal("1000.00"))
+                .build()));
     }
 }

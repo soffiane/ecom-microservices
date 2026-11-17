@@ -33,9 +33,11 @@ public class Order {
     private Long userId;
 
     @Enumerated(EnumType.STRING)
+    @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<OrderItem> items = new ArrayList<>();
     private BigDecimal totalAmount;
 

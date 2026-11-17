@@ -16,11 +16,18 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CartServiceImpl implements CartService {
 
+    /**
+     * Placeholder UNIT price until order-service fetches the real price from product-service.
+     * CartItem.price always holds a unit price; line totals are computed as price x quantity.
+     */
+    static final BigDecimal PLACEHOLDER_UNIT_PRICE = BigDecimal.valueOf(1000);
+
     private final CartItemRepository cartItemRepository;
     /*private final ProductRepository productRepository;
     private final UserRepository userRepository;*/
 
     @Override
+    @Transactional
     public void addToCart(Long userId, CartItemRequest cartItemRequest) {
         /*productRepository.findById(cartItemRequest.getProductId()).ifPresentOrElse(product -> {
             if (product.getQuantity() < cartItemRequest.getQuantity()) {
@@ -48,13 +55,12 @@ public class CartServiceImpl implements CartService {
         });*/
         cartItemRepository.findByUserIdAndProductId(userId, cartItemRequest.getProductId()).ifPresentOrElse(cartItem -> {
             cartItem.setQuantity(cartItem.getQuantity() + cartItemRequest.getQuantity());
-            cartItem.setPrice(BigDecimal.valueOf(cartItem.getQuantity() * 1000L));
             cartItemRepository.save(cartItem);
         }, () -> cartItemRepository.save(CartItem.builder()
                 .userId(userId)
                 .productId(cartItemRequest.getProductId())
                 .quantity(cartItemRequest.getQuantity())
-                .price(BigDecimal.valueOf(cartItemRequest.getQuantity() * 1000L))
+                .price(PLACEHOLDER_UNIT_PRICE)
                 .build()));
     }
 

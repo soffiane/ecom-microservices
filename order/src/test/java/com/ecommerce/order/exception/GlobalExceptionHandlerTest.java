@@ -2,6 +2,7 @@ package com.ecommerce.order.exception;
 
 import com.ecommerce.order.controller.CartController;
 import com.ecommerce.order.controller.OrderController;
+import com.ecommerce.order.dto.CartItemRequest;
 import com.ecommerce.order.service.CartService;
 import com.ecommerce.order.service.OrderService;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,9 +10,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -63,6 +68,21 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(post("/api/v1/orders").header("X-User-ID", 10L))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string("Cart not found or empty"));
+    }
+
+    @Test
+    void shouldReturnConflictWhenDataIntegrityViolationThrown() throws Exception {
+        //given - e.g. concurrent add of the same product hitting the unique constraint
+        doThrow(new DataIntegrityViolationException("uk_cart_item_user_product"))
+                .when(cartService).addToCart(eq(10L), any(CartItemRequest.class));
+
+        //when //then
+        mockMvc.perform(post("/api/v1/cart")
+                        .header("X-User-ID", 10L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":100,\"quantity\":1}"))
+                .andExpect(status().isConflict())
+                .andExpect(content().string("Concurrent modification, please retry"));
     }
 
     @Test

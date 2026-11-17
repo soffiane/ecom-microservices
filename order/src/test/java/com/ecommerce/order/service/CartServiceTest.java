@@ -7,6 +7,7 @@ import com.ecommerce.order.repository.CartItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -42,27 +43,32 @@ class CartServiceTest {
                 .userId(10L)
                 .productId(100L)
                 .quantity(2)
-                .price(new BigDecimal("2000.00"))
+                .price(new BigDecimal("1000.00"))
                 .build();
     }
 
     @Test
-    void addToCart_shouldAddNewItemWhenNotExists() {
+    void addToCart_shouldAddNewItemWithUnitPriceWhenNotExists() {
         //given
         Long userId = 10L;
         when(cartItemRepository.findByUserIdAndProductId(userId, 100L)).thenReturn(Optional.empty());
         when(cartItemRepository.save(any(CartItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        ArgumentCaptor<CartItem> captor = ArgumentCaptor.forClass(CartItem.class);
 
         //when
         cartService.addToCart(userId, cartItemRequest);
 
         //then
         verify(cartItemRepository).findByUserIdAndProductId(userId, 100L);
-        verify(cartItemRepository).save(any(CartItem.class));
+        verify(cartItemRepository).save(captor.capture());
+        CartItem saved = captor.getValue();
+        assertEquals(2, saved.getQuantity());
+        // price is a UNIT price, not multiplied by quantity
+        assertEquals(0, CartServiceImpl.PLACEHOLDER_UNIT_PRICE.compareTo(saved.getPrice()));
     }
 
     @Test
-    void addToCart_shouldUpdateQuantityWhenItemExists() {
+    void addToCart_shouldUpdateQuantityAndKeepUnitPriceWhenItemExists() {
         //given
         Long userId = 10L;
         when(cartItemRepository.findByUserIdAndProductId(userId, 100L)).thenReturn(Optional.of(existingCartItem));
@@ -75,6 +81,7 @@ class CartServiceTest {
         verify(cartItemRepository).findByUserIdAndProductId(userId, 100L);
         verify(cartItemRepository).save(existingCartItem);
         assertEquals(4, existingCartItem.getQuantity());
+        assertEquals(new BigDecimal("1000.00"), existingCartItem.getPrice());
     }
 
     @Test

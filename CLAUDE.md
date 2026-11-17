@@ -51,13 +51,13 @@ On Windows PowerShell use `.\mvnw.cmd`.
 - Auditing via `AuditConfig` + `AuditorAwareImpl` (falls back to `"system"`).
 - Security: each module has a `SecurityConfig`; API and actuator paths are currently `permitAll`, CSRF disabled.
 - Order/cart endpoints identify the user with the `X-User-ID` request header.
-- No inter-service calls yet: `order` stores `userId`/`productId` as plain `Long`; cart price is a placeholder (`quantity * 1000`). Old cross-module JPA code is left commented out.
+- No inter-service calls yet: `order` stores `userId`/`productId` as plain `Long`. `CartItem.price` / `OrderItem.price` are **unit prices** (placeholder `CartServiceImpl.PLACEHOLDER_UNIT_PRICE`); totals are always `price × quantity`. Old cross-module JPA code is left commented out.
 
 ### Test conventions
 - Unit: `@ExtendWith(MockitoExtension.class)`, `@Mock` / `@InjectMocks`.
 - Web slice: `@WebMvcTest(XController.class)` + `@MockitoBean`.
 - Integration/E2E: `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Testcontainers` with a `PostgreSQLContainer` + `@DynamicPropertySource` (MongoDB container in `user`).
-- Each JPA module needs `src/test/resources/application-test.yaml` with `ddl-auto: create-drop`: tests run without the config-server, so nothing else creates the schema. Any `@SpringBootTest` must use `@ActiveProfiles("test")`.
+- Tests run without the config-server, so each module's `src/test/resources/application-test.yaml` must set what the code relies on: `ddl-auto: create-drop` for JPA modules, `spring.data.mongodb.auto-index-creation: true` for `user` (unique email index). Any `@SpringBootTest` must use `@ActiveProfiles("test")` and start its database container.
 - Packages mirror main: `controller`, `service`, `mapper`, `integration`, `e2e`.
 - Method names: `method_shouldDoXWhenY`; bodies structured with `//given`, `//when`, `//then`.
 

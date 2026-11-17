@@ -15,7 +15,7 @@ class UserRequestMapperTest {
 
     @BeforeEach
     void setUp() {
-        userRequestMapper = new UserRequestMapper();
+        userRequestMapper = new UserRequestMapper(new AddressMapper());
     }
 
     @Test
@@ -55,6 +55,8 @@ class UserRequestMapperTest {
         assertEquals("NY", result.getAddress().getState());
         assertEquals("10001", result.getAddress().getZipCode());
         assertEquals("USA", result.getAddress().getCountry());
+        // a client-supplied address id is ignored
+        assertNull(result.getAddress().getId());
     }
 
     @Test
@@ -76,7 +78,7 @@ class UserRequestMapperTest {
         assertNotNull(result);
         assertEquals("John", result.getFirstName());
         assertEquals("Doe", result.getLastName());
-        assertNotNull(result.getAddress());
+        assertNull(result.getAddress());
     }
 
     @Test
@@ -99,5 +101,32 @@ class UserRequestMapperTest {
         //then
         assertNotNull(result);
         assertNotNull(result.getAddress());
+    }
+
+    @Test
+    void mapToUserRequest_shouldMapAddressExactlyLikeAddressMapperUsedOnUpdate() {
+        //given
+        AddressDTO addressDTO = AddressDTO.builder()
+                .id("client-id")
+                .street("1 rue de Paris")
+                .city("Paris")
+                .state("IDF")
+                .zipcode("75001")
+                .country("France")
+                .build();
+        UserRequest userRequest = UserRequest.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email("john.doe@example.com")
+                .phone("1234567890")
+                .role(UserRole.CUSTOMER)
+                .address(addressDTO)
+                .build();
+
+        //when
+        User created = userRequestMapper.mapToUserRequest(userRequest);
+
+        //then - create and update paths produce the same address
+        assertEquals(new AddressMapper().mapToAddress(addressDTO), created.getAddress());
     }
 }

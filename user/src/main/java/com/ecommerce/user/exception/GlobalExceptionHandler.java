@@ -1,6 +1,6 @@
 package com.ecommerce.user.exception;
 
-import com.mongodb.MongoWriteException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -14,11 +14,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.notFound().build();
     }
 
-    @ExceptionHandler(MongoWriteException.class)
-    public ResponseEntity<String> handleMongoWriteException(MongoWriteException ex) {
-        if (ex.getError().getCode() == 11000) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body("Email already exists");
-        }
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+    /**
+     * Spring Data translates MongoDB duplicate-key errors (code 11000) into DuplicateKeyException,
+     * so the raw MongoWriteException never reaches the controller layer.
+     * The only unique index on users is the email.
+     */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<String> handleDuplicateKeyException(DuplicateKeyException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body("Email already exists");
     }
 }

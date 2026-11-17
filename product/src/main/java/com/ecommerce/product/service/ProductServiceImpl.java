@@ -55,7 +55,10 @@ public class ProductServiceImpl implements ProductService {
         updatedProduct.setDescription(product.getDescription());
         updatedProduct.setPrice(product.getPrice());
         updatedProduct.setCategory(product.getCategory());
-        updatedProduct.setQuantity(product.getStock());
+        // stock is optional in the request: keep the current stock when it is not provided
+        if (product.getStock() != null) {
+            updatedProduct.setQuantity(product.getStock());
+        }
         updatedProduct.setImage(product.getImage());
         return productRepository.save(updatedProduct);
 

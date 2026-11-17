@@ -42,7 +42,7 @@ public class UserController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<UserResponse> updateUser(@PathVariable String id, @RequestBody UserRequest user) {
+    public ResponseEntity<UserResponse> updateUser(@PathVariable String id, @RequestBody @Valid UserRequest user) {
         return userService.updateUser(id, user)
                 .map(userResponseMapper::mapToUserResponse)
                 .map(ResponseEntity::ok)

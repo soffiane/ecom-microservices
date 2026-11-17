@@ -197,4 +197,66 @@ class UserIntegrationTest {
                         .content(updateJson))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    @WithMockUser
+    void shouldReturnConflictWhenCreatingUserWithExistingEmail() throws Exception {
+        //given
+        userRepository.save(User.builder()
+                .firstName("John")
+                .lastName("Doe")
+                .email("john.doe@example.com")
+                .phone("1234567890")
+                .role(UserRole.CUSTOMER)
+                .build());
+
+        String duplicateJson = """
+                {
+                    "firstName": "Johnny",
+                    "lastName": "Other",
+                    "email": "john.doe@example.com",
+                    "phone": "0987654321",
+                    "role": "CUSTOMER"
+                }
+                """;
+
+        //when & then
+        mockMvc.perform(post("/api/v1/users")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(duplicateJson))
+                .andExpect(status().isConflict())
+                .andExpect(content().string("Email already exists"));
+
+        assertEquals(1, userRepository.count());
+    }
+
+    @Test
+    @WithMockUser
+    void shouldReturnConflictWhenUpdatingUserToExistingEmail() throws Exception {
+        //given
+        userRepository.save(User.builder()
+                .firstName("John").lastName("Doe").email("john.doe@example.com")
+                .phone("1234567890").role(UserRole.CUSTOMER).build());
+        User jane = userRepository.save(User.builder()
+                .firstName("Jane").lastName("Doe").email("jane.doe@example.com")
+                .phone("0987654321").role(UserRole.CUSTOMER).build());
+
+        String updateJson = """
+                {
+                    "firstName": "Jane",
+                    "lastName": "Doe",
+                    "email": "john.doe@example.com",
+                    "phone": "0987654321",
+                    "role": "CUSTOMER"
+                }
+                """;
+
+        //when & then
+        mockMvc.perform(put("/api/v1/users/" + jane.getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(updateJson))
+                .andExpect(status().isConflict());
+
+        assertEquals("jane.doe@example.com", userRepository.findById(jane.getId()).orElseThrow().getEmail());
+    }
 }
