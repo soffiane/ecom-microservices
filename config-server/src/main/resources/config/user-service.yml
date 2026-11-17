@@ -1,0 +1,18 @@
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/user}
+  data:
+    mongodb:
+      auto-index-creation: false
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+server:
+  port: 8082
