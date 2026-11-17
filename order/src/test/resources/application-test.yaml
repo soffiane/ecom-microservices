@@ -1,0 +1,12 @@
+# Test profile. Without a running config-server, nothing else sets ddl-auto,
+# so the schema must be created here. The datasource URL/credentials are injected
+# by Testcontainers via @DynamicPropertySource.
+spring:
+  application:
+    name: order-service
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true

@@ -1,0 +1,28 @@
+#spring:
+#  datasource:
+#    url: ${POSTGRES_URL}
+#    driverClassName: org.postgresql.Driver
+#    username: ${POSTGRES_USERNAME}
+#    password: ${POSTGRES_PASSWORD}
+#  jpa:
+#    database: postgresql
+#    hibernate:
+#      ddl-auto: update
+#    database-platform: org.hibernate.dialect.PostgreSQLDialect
+#    show-sql: true
+#  application:
+#    name: product-service
+#
+#server:
+#  port: 8081
+
+spring:
+  application:
+    name: product-service
+
+  #  profiles:
+  #    active: dev
+
+  config:
+    import: optional:configserver:http://localhost:8888
+

@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: config-server
+  profiles:
+    active: native
+  cloud:
+    config:
+      server:
+        native:
+          #charge les config au demarrage mais ne prend pas en compte les modifications apres le demarrage
+          #search-locations: classpath:/config
+          search-locations: file:///C:/Users/Forza%20PC/Desktop/Workspaces/ecom-microservices/config-server/src/main/resources/config
+
+server:
+  port: 8888
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+
+#  cloud:
+#    config:
+#      server:
+#        git:
+#          uri: https://github.com/soffiane/config-server
+#          search-paths: src/main/resources
+#          default-label: master
+#          #pour acceder aux repo prives - variables d'environnement
+#          #token crée dans github - fine grained personnal token
+#          username: ${GIT_USERNAME}
+#          password: ${GIT_TOKEN}
+# configuration propre au profil jdbc
+#  profiles:
+#    active: jdbc
+#  datasource:
+#    url: jdbc:postgresql://localhost:5432/configuration
+#    driverClassName: org.postgresql.Driver
+#    username: ${DB_USERNAME}
+#    password: ${DB_PASSWORD}
+#
+#
+#
+#  cloud:
+#    config:
+#      server:
+#        jdbc:
+#          #recuperation de la configuration depuis la base de données
+#          sql: "SELECT PROP_KEY, PROP_VALUE from PROPERTIES where APPLICATION=? and PROFILE=? and LABEL=?"
+#          default-label: main
+
+#encrypt:
+#  #POST localhost:8888/encrypt
+#  #header content-type text/plain
+#  key: ${ENCRYPT_KEY}
+
+#encrypt:
+#  key-store:
+#    location: config-server.jks
+#    password: mypass
+#    alias: config-server-key

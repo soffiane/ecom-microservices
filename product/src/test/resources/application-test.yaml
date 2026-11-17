@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: ${TESTCONTAINERS_POSTGRESQL_URL:jdbc:tc:postgresql:16-alpine:///product?TC_INITSCRIPT=init.sql}
+    driverClassName: org.testcontainers.jdbc.ContainerDatabaseDriver
+    username: postgres
+    password: postgres
+  jpa:
+    database: postgresql
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+  application:
+    name: product-service
+
+server:
+  port: 8081

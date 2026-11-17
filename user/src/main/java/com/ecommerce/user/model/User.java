@@ -1,0 +1,41 @@
+package com.ecommerce.user.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import org.springframework.data.annotation.*;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.time.LocalDateTime;
+
+
+@Data
+@Document(collection = "users")
+@AllArgsConstructor
+@Builder
+public class User {
+
+    @Id
+    private String id;
+    private String firstName;
+    private String lastName;
+
+    @Indexed(unique = true)
+    private String email;
+    private String phone;
+    private UserRole role = UserRole.CUSTOMER;
+
+    private Address address;
+
+    @CreatedDate
+    private LocalDateTime createdAt;
+    @LastModifiedDate
+    private LocalDateTime updatedAt;
+    @CreatedBy
+    private String createdBy;
+    @LastModifiedBy
+    private String modifiedBy;
+
+
+}

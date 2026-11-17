@@ -1,0 +1,29 @@
+#spring:
+#  mongodb:
+#    uri: ${MONGODB_URI:mongodb://localhost:27017/user}
+#  data:
+#    mongodb:
+#      auto-index-creation: false
+  #    username: root
+#    password: example
+#    database: user
+#    host: localhost
+#    port: 27017
+#    authentication-database: admin
+  #  datasource:
+#    url: jdbc:postgresql://localhost:5432/user
+#    driverClassName: org.postgresql.Driver
+#    username: postgres
+#    password: postgres
+#  jpa:
+#    database: postgresql
+#    hibernate:
+#      ddl-auto: update
+#    database-platform: org.hibernate.dialect.PostgreSQLDialect
+#    show-sql: true
+spring:
+  application:
+    name: user-service
+  config:
+    import: optional:configserver:http://localhost:8888
+
