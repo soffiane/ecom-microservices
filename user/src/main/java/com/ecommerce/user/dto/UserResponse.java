@@ -1,6 +1,6 @@
 package com.ecommerce.user.dto;
 
-import com.ecommerce.user.model.UserRole;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Data;
 
@@ -13,6 +13,7 @@ public class UserResponse {
     private String lastName;
     private String email;
     private String phone;
-    private UserRole role;
+    //private UserRole role;
+    @Schema(description = "Empty object (all fields null) when the user has no address")
     private AddressDTO address;
 }

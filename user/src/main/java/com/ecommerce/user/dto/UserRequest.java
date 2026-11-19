@@ -3,8 +3,6 @@ package com.ecommerce.user.dto;
 import com.ecommerce.user.model.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,10 +25,10 @@ public class UserRequest {
     private String email;
 
     @NotBlank(message = "Phone is required")
-    @Pattern(message = "Phone is not valid", regexp = "^\\+?\\d{10,15}$")
+    //@Pattern(message = "Phone is not valid", regexp = "^\\+?\\d{10,15}$")
     private String phone;
 
-    @NotNull(message = "Role is required")
+    //@NotNull(message = "Role is required")
     private UserRole role;
 
     private AddressDTO address;

@@ -1,12 +1,19 @@
-# Test profile. Without a running config-server, nothing else sets ddl-auto,
-# so the schema must be created here. The datasource URL/credentials are injected
-# by Testcontainers via @DynamicPropertySource.
+# Test profile. Runs without the config-server, so it mirrors the schema settings of
+# config-server/.../config/order-service.yml: Flyway creates the "order_service" schema and
+# applies the real migrations, then Hibernate validates the entities against them.
+# The datasource URL/credentials are injected by Testcontainers via @DynamicPropertySource.
 spring:
   application:
     name: order-service
+  flyway:
+    schemas: order_service
+    default-schema: order_service
   jpa:
     database: postgresql
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     show-sql: true
+    properties:
+      hibernate:
+        default_schema: order_service

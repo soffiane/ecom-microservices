@@ -259,4 +259,15 @@ class UserIntegrationTest {
 
         assertEquals("jane.doe@example.com", userRepository.findById(jane.getId()).orElseThrow().getEmail());
     }
+
+    @Test
+    void apiDocs_shouldBeServedWithoutAuthenticationWhenRequested() throws Exception {
+        //given - no authenticated user
+
+        //when / then
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("User Service API"))
+                .andExpect(jsonPath("$.paths['/api/v1/users/{id}']").exists());
+    }
 }

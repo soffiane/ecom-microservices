@@ -11,7 +11,7 @@ E-commerce backend split into Spring Boot microservices. Each module is an **ind
 | `config-server/` | `config-server` | 8888 | — (serves config) | — |
 | `product/` | `product-service` | 8081 | PostgreSQL (JPA) | `/api/v1/products` |
 | `user/` | `user-service` | 8082 | MongoDB | `/api/v1/users` |
-| `order/` | `order-service` | 8083 | PostgreSQL (JPA, db `order_db`) | `/api/v1/cart`, `/api/v1/orders` |
+| `order/` | `order-service` | 8083 | PostgreSQL (JPA + Flyway, schema `order_service` in db `postgres`) | `/api/v1/cart`, `/api/v1/orders` |
 
 Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4, Lombok, Spring Security, Actuator, Jackson 3 (`tools.jackson.*`), JUnit 5 + Mockito, Testcontainers. Base package: `com.ecommerce.<module>`.
 
@@ -28,7 +28,7 @@ Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4, Lombok, Spring Securit
 ### Local infrastructure (`docker-compose.yaml`)
 PostgreSQL 15 (5432), pgAdmin (5050), RabbitMQ + management (5672/15672), Prometheus (9090), Grafana (3000).
 - MongoDB / mongo-express are **commented out**, but `user-service` needs MongoDB.
-- No init script creates `order_db`; it must exist in Postgres.
+- order-service needs no manual DB setup: Flyway creates the `order_service` schema and applies `order/src/main/resources/db/migration` at startup; Hibernate runs with `ddl-auto: validate`. Schema changes go in a new `V<n>__*.sql` migration, never by editing an applied one.
 - `prometheus.yml` scrapes `host.docker.internal:8080`, which matches no current service port.
 
 ### Commands
@@ -57,7 +57,7 @@ On Windows PowerShell use `.\mvnw.cmd`.
 - Unit: `@ExtendWith(MockitoExtension.class)`, `@Mock` / `@InjectMocks`.
 - Web slice: `@WebMvcTest(XController.class)` + `@MockitoBean`.
 - Integration/E2E: `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Testcontainers` with a `PostgreSQLContainer` + `@DynamicPropertySource` (MongoDB container in `user`).
-- Tests run without the config-server, so each module's `src/test/resources/application-test.yaml` must set what the code relies on: `ddl-auto: create-drop` for JPA modules, `spring.data.mongodb.auto-index-creation: true` for `user` (unique email index). Any `@SpringBootTest` must use `@ActiveProfiles("test")` and start its database container.
+- Tests run without the config-server, so each module's `src/test/resources/application-test.yaml` must set what the code relies on: `ddl-auto: create-drop` for `product`, the Flyway schema settings + `ddl-auto: validate` for `order` (tests run the real migrations), `spring.data.mongodb.auto-index-creation: true` for `user` (unique email index). Any `@SpringBootTest` must use `@ActiveProfiles("test")` and start its database container.
 - Packages mirror main: `controller`, `service`, `mapper`, `integration`, `e2e`.
 - Method names: `method_shouldDoXWhenY`; bodies structured with `//given`, `//when`, `//then`.
 

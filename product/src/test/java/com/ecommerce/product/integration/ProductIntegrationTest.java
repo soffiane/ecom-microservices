@@ -215,4 +215,15 @@ class ProductIntegrationTest {
                         .content(updateJson))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void apiDocs_shouldBeServedWithoutAuthenticationWhenRequested() throws Exception {
+        //given - no authenticated user
+
+        //when / then
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Product Service API"))
+                .andExpect(jsonPath("$.paths['/api/v1/products/{id}']").exists());
+    }
 }

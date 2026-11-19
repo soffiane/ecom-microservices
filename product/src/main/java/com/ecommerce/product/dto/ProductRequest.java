@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.math.BigDecimal;
 
@@ -27,6 +28,7 @@ public class ProductRequest {
     @NotBlank(message = "Category is required")
     private String category;
     @Min(value = 0, message = "Stock must be greater than or equal to 0")
+    @Schema(description = "Defaults to 0 on create; kept unchanged on update when omitted")
     private Integer stock;
     private String image;
 }
