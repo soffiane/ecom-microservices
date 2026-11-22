@@ -41,7 +41,7 @@ class OrderControllerTest {
     @Test
     void placeOrder_shouldReturnCreatedStatus() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(orderService.placeOrder(userId)).thenReturn(orderResponse);
 
         //when
@@ -57,7 +57,7 @@ class OrderControllerTest {
     @Test
     void placeOrder_shouldCallServiceWithCorrectUserId() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(orderService.placeOrder(userId)).thenReturn(orderResponse);
 
         //when

@@ -1,14 +1,21 @@
 package com.ecommerce.order.service;
 
+import com.ecommerce.order.clients.ProductClient;
 import com.ecommerce.order.domain.CartItem;
 import com.ecommerce.order.dto.CartItemRequest;
+import com.ecommerce.order.dto.ProductResponse;
+import com.ecommerce.order.dto.UserResponse;
 import com.ecommerce.order.exception.CartItemNotFoundException;
+import com.ecommerce.order.exception.OutOfStockException;
+import com.ecommerce.order.exception.ProductNotFoundException;
+import com.ecommerce.order.exception.UserNotFoundException;
 import com.ecommerce.order.repository.CartItemRepository;
+import com.ecommerce.order.users.UserClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.HttpClientErrorException;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,88 +23,88 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class CartServiceImpl implements CartService {
 
-    /**
-     * Placeholder UNIT price until order-service fetches the real price from product-service.
-     * CartItem.price always holds a unit price; line totals are computed as price x quantity.
-     */
-    static final BigDecimal PLACEHOLDER_UNIT_PRICE = BigDecimal.valueOf(1000);
+    private final ProductClient productClient;
+    private final UserClient userClient;
 
     private final CartItemRepository cartItemRepository;
-    /*private final ProductRepository productRepository;
-    private final UserRepository userRepository;*/
 
     @Override
     @Transactional
-    public void addToCart(Long userId, CartItemRequest cartItemRequest) {
-        /*productRepository.findById(cartItemRequest.getProductId()).ifPresentOrElse(product -> {
-            if (product.getQuantity() < cartItemRequest.getQuantity()) {
+    public void addToCart(String userId, CartItemRequest cartItemRequest) {
+        findActiveProduct(cartItemRequest.getProductId()).ifPresentOrElse(product -> {
+            if (product.getStock() < cartItemRequest.getQuantity()) {
                 throw new OutOfStockException("Article is out of stock");
             }
-            userRepository.findById(userId).ifPresentOrElse(user -> {
-                //si le produit est deja ajouté au panier, on modifie la quantité
-                cartItemRepository.findByUserIdAndProduct(userId, product).ifPresent(cartItem -> {
-                    cartItem.setQuantity(cartItem.getQuantity() + cartItemRequest.getQuantity());
-                    cartItem.setPrice(product.getPrice().multiply(BigDecimal.valueOf(cartItem.getQuantity())));
-                    cartItemRepository.save(cartItem);
-                });
-                //sinon on l'ajoute au panier
-                cartItemRepository.save(CartItem.builder()
-                        .userId(user)
-                        .product(product)
-                        .quantity(cartItemRequest.getQuantity())
-                        .price(product.getPrice().multiply(BigDecimal.valueOf(cartItemRequest.getQuantity())))
-                        .build());
+            findUser(userId).ifPresentOrElse(user -> {
+                // price = prix unitaire : les totaux sont calculés price × quantity
+                CartItem cartItem = cartItemRepository.findByUserIdAndProductId(userId, product.getId())
+                        .map(existing -> {
+                            existing.setQuantity(existing.getQuantity() + cartItemRequest.getQuantity());
+                            return existing;
+                        })
+                        .orElseGet(() -> CartItem.builder()
+                                .userId(user.getId())
+                                .productId(product.getId())
+                                .quantity(cartItemRequest.getQuantity())
+                                .build());
+                cartItem.setPrice(product.getPrice());
+                cartItemRepository.save(cartItem);
             }, () -> {
                 throw new UserNotFoundException("User not found");
             });
         }, () -> {
             throw new ProductNotFoundException("Product not found");
-        });*/
-        cartItemRepository.findByUserIdAndProductId(userId, cartItemRequest.getProductId()).ifPresentOrElse(cartItem -> {
-            cartItem.setQuantity(cartItem.getQuantity() + cartItemRequest.getQuantity());
-            cartItemRepository.save(cartItem);
-        }, () -> cartItemRepository.save(CartItem.builder()
-                .userId(userId)
-                .productId(cartItemRequest.getProductId())
-                .quantity(cartItemRequest.getQuantity())
-                .price(PLACEHOLDER_UNIT_PRICE)
-                .build()));
-    }
-
-    @Override
-    @Transactional
-    public void removeFromCart(Long userId, Long productId) {
-        /*productRepository.findById(productId).ifPresentOrElse(product -> {
-            userRepository.findById(userId).ifPresentOrElse(user -> {
-                cartItemRepository.deleteByUserAndProduct(user, product);
-            }, () -> {
-                throw new UserNotFoundException("User not found");
-            });
-        }, () -> {
-            throw new ProductNotFoundException("Product not found");
-        });*/
-        cartItemRepository.findByUserIdAndProductId(userId, productId).ifPresentOrElse(cartItem -> {
-            cartItemRepository.deleteByUserIdAndProductId(userId, productId);
-        }, () -> {
-            throw new CartItemNotFoundException("Cart item not found");
         });
     }
 
+    // product-service renvoie aussi les produits inactifs : on les traite comme introuvables
+    private Optional<ProductResponse> findActiveProduct(Long productId) {
+        try {
+            return productClient.findByIdAndActiveTrue(productId).filter(ProductResponse::isActive);
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+    }
+
+    // un 404 du service distant lève une exception au lieu de renvoyer un Optional vide
+    private Optional<UserResponse> findUser(String userId) {
+        try {
+            return userClient.getUserById(userId);
+        } catch (HttpClientErrorException.NotFound e) {
+            return Optional.empty();
+        }
+    }
+
     @Override
-    public Optional<List<CartItem>> getUserCartItems(Long userId) {
-        /*return userRepository.findById(userId)
-                .map(cartItemRepository::findByUser)
-                .orElseThrow(() -> new UserNotFoundException("User not found"));*/
+    @Transactional
+    public void removeFromCart(String userId, Long productId) {
+        requireUser(userId);
+        // pas de vérification côté product-service : on doit pouvoir retirer un produit désactivé ou supprimé depuis
+        cartItemRepository.findByUserIdAndProductId(userId, productId).ifPresentOrElse(
+                cartItem -> cartItemRepository.deleteByUserIdAndProductId(userId, productId),
+                () -> {
+                    throw new CartItemNotFoundException("Cart item not found");
+                });
+    }
+
+    @Override
+    public Optional<List<CartItem>> getUserCartItems(String userId) {
+        requireUser(userId);
         return cartItemRepository.findByUserId(userId)
                 .filter(cartItems -> !cartItems.isEmpty());
     }
 
     @Override
     @Transactional
-    public void clearCart(Long userId) {
-        /*userRepository.findById(userId).ifPresentOrElse(cartItemRepository::deleteByUser, () -> {
-            throw new UserNotFoundException("User not found");
-        });*/
+    public void clearCart(String userId) {
+        // pas d'appel à user-service : seul placeOrder appelle clearCart, après avoir déjà vérifié l'utilisateur
+        // (via getUserCartItems). Un nouvel appel distant ici pourrait annuler une commande déjà enregistrée.
         cartItemRepository.deleteByUserId(userId);
+    }
+
+    private void requireUser(String userId) {
+        if (findUser(userId).isEmpty()) {
+            throw new UserNotFoundException("User not found");
+        }
     }
 }

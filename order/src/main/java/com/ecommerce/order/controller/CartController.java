@@ -35,15 +35,19 @@ public class CartController {
     @PostMapping
     @Operation(summary = "Add a product to the cart",
             description = "Adds the quantity to the existing line when the product is already in the cart. "
-                    + "The product id is not checked against product-service and the unit price is a placeholder.")
+                    + "The product (must be active) and the user are checked against product-service and user-service; "
+                    + "the unit price is the product's current price.")
     @ApiResponse(responseCode = "201", description = "Product added; the response has no body", content = @Content)
-    @ApiResponse(responseCode = "400", description = "Validation failed or X-User-ID missing/not a number", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Validation failed, X-User-ID missing, or not enough stock", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Product not found or inactive, or user not found",
+            content = @Content(mediaType = "text/plain",
+                    schema = @Schema(type = "string", example = "Product not found")))
     @ApiResponse(responseCode = "409", description = "Concurrent modification of the same cart line; safe to retry",
             content = @Content(mediaType = "text/plain",
                     schema = @Schema(type = "string", example = "Concurrent modification, please retry")))
     public ResponseEntity<CartItemResponse> addToCart(
             @Parameter(in = ParameterIn.HEADER, description = USER_ID_HEADER_DESCRIPTION, required = true)
-            @RequestHeader("X-User-ID") Long userId,
+            @RequestHeader("X-User-ID") String userId,
             @RequestBody @Valid CartItemRequest cartItemRequest
     ) {
         cartService.addToCart(userId, cartItemRequest);
@@ -56,8 +60,11 @@ public class CartController {
     @ApiResponse(responseCode = "400", description = "The product is not in the user's cart",
             content = @Content(mediaType = "text/plain",
                     schema = @Schema(type = "string", example = "Cart item not found")))
+    @ApiResponse(responseCode = "404", description = "User not found in user-service",
+            content = @Content(mediaType = "text/plain",
+                    schema = @Schema(type = "string", example = "User not found")))
     public ResponseEntity<Void> removeFromCart(@Parameter(in = ParameterIn.HEADER, description = USER_ID_HEADER_DESCRIPTION, required = true)
-                                               @RequestHeader("X-User-ID") Long userId,
+                                               @RequestHeader("X-User-ID") String userId,
                                                @Parameter(description = "Product id") @PathVariable Long productId) {
         cartService.removeFromCart(userId, productId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
@@ -67,8 +74,11 @@ public class CartController {
     @Operation(summary = "Get the cart content")
     @ApiResponse(responseCode = "200", description = "Cart lines; `price` is a unit price")
     @ApiResponse(responseCode = "204", description = "The cart is empty", content = @Content)
+    @ApiResponse(responseCode = "404", description = "User not found in user-service",
+            content = @Content(mediaType = "text/plain",
+                    schema = @Schema(type = "string", example = "User not found")))
     public ResponseEntity<List<CartItemResponse>> getCartForUser(@Parameter(in = ParameterIn.HEADER, description = USER_ID_HEADER_DESCRIPTION, required = true)
-                                                                 @RequestHeader("X-User-ID") Long userId) {
+                                                                 @RequestHeader("X-User-ID") String userId) {
         return cartService.getUserCartItems(userId)
                 .map(cartItems -> ResponseEntity.ok(cartItems.stream().map(CartItemResponseMapper::toCartItemResponse).toList()))
                 .orElse(ResponseEntity.status(HttpStatus.NO_CONTENT).build());

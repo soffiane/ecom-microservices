@@ -7,11 +7,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface CartService {
-    void addToCart(Long userId, CartItemRequest cartItemRequest);
+    void addToCart(String userId, CartItemRequest cartItemRequest);
 
-    void removeFromCart(Long userId, Long productId);
+    void removeFromCart(String userId, Long productId);
 
-    Optional<List<CartItem>> getUserCartItems(Long userId);
+    Optional<List<CartItem>> getUserCartItems(String userId);
 
-    void clearCart(Long userId);
+    void clearCart(String userId);
 }

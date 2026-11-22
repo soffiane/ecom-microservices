@@ -17,7 +17,6 @@ public class UserResponseMapper {
                 .lastName(user.getLastName())
                 .email(user.getEmail())
                 .phone(user.getPhone())
-                .role(user.getRole())
                 .address(populateAddressDto(user.getAddress()))
                 .build();
     }

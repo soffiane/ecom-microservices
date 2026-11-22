@@ -13,7 +13,6 @@ public class UserResponse {
     private String lastName;
     private String email;
     private String phone;
-    //private UserRole role;
     @Schema(description = "Empty object (all fields null) when the user has no address")
     private AddressDTO address;
 }

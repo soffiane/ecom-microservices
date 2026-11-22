@@ -14,6 +14,11 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ex.getMessage());
     }
 
+    @ExceptionHandler({ProductNotFoundException.class, UserNotFoundException.class})
+    public ResponseEntity<String> handleNotFoundExceptions(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    }
+
     /**
      * Raised e.g. when two concurrent requests add the same product to the same cart
      * and hit the (user_id, product_id) unique constraint. The client can safely retry.

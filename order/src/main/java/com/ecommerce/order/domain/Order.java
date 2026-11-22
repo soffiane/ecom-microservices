@@ -30,7 +30,7 @@ public class Order {
     /*@ManyToOne
     @JoinColumn(name = "user_id")
     private User user;*/
-    private Long userId;
+    private String userId;
 
     @Enumerated(EnumType.STRING)
     @Builder.Default

@@ -18,23 +18,19 @@ import java.util.List;
 public class OrderServiceImpl implements OrderService{
 
     private final OrderRepository orderRepository;
-    //private final UserRepository userRepository;
     private final CartService cartService;
     private final OrderResponseMapper orderResponseMapper;
 
-    public OrderServiceImpl(OrderRepository orderRepository, /*UserRepository userRepository,*/ CartService cartService, OrderResponseMapper orderResponseMapper) {
+    public OrderServiceImpl(OrderRepository orderRepository, CartService cartService, OrderResponseMapper orderResponseMapper) {
         this.orderRepository = orderRepository;
-        //this.userRepository = userRepository;
         this.cartService = cartService;
         this.orderResponseMapper = orderResponseMapper;
     }
 
     @Override
     @Transactional
-    public OrderResponse placeOrder(Long userId) {
-        //validate for user
-        //User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException("User not found"));
-        //validate for cart items
+    public OrderResponse placeOrder(String userId) {
+        //validate user (via user-service) and cart items: seule vérification distante, faite avant l'enregistrement
         List<CartItem> cartItems = cartService.getUserCartItems(userId).orElseThrow(() -> new EmptyCartException("Cart not found or empty"));
         //calculate total amount
         //save order

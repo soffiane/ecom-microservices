@@ -45,7 +45,7 @@ class OrderServiceTest {
     void setUp() {
         cartItem = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .productId(100L)
                 .quantity(2)
                 .price(new BigDecimal("1000.00"))
@@ -53,7 +53,7 @@ class OrderServiceTest {
 
         order = Order.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .status(OrderStatus.CONFIRMED)
                 .totalAmount(new BigDecimal("2000.00"))
                 .build();
@@ -68,7 +68,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_shouldCreateOrderSuccessfully() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.of(List.of(cartItem)));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
         when(orderResponseMapper.mapToOrderResponse(order)).thenReturn(orderResponse);
@@ -89,7 +89,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_shouldThrowEmptyCartExceptionWhenCartIsEmpty() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.empty());
 
         //when & then
@@ -102,17 +102,17 @@ class OrderServiceTest {
     @Test
     void placeOrder_shouldCalculateTotalAmountFromUnitPriceTimesQuantity() {
         //given - cart item price is a UNIT price
-        Long userId = 10L;
+        String userId = "10";
         CartItem item1 = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId(userId)
                 .productId(100L)
                 .quantity(2)
                 .price(new BigDecimal("1000.00"))
                 .build();
         CartItem item2 = CartItem.builder()
                 .id(2L)
-                .userId(10L)
+                .userId(userId)
                 .productId(200L)
                 .quantity(3)
                 .price(new BigDecimal("250.00"))
@@ -142,7 +142,7 @@ class OrderServiceTest {
     @Test
     void placeOrder_shouldSetOrderStatusToConfirmed() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.of(List.of(cartItem)));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(orderResponseMapper.mapToOrderResponse(any(Order.class))).thenAnswer(invocation -> {

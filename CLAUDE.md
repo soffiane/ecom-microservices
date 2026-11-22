@@ -9,16 +9,18 @@ E-commerce backend split into Spring Boot microservices. Each module is an **ind
 | Module | `spring.application.name` | Port | Storage | API base path |
 |---|---|---|---|---|
 | `config-server/` | `config-server` | 8888 | — (serves config) | — |
+| `eureka/` | `eureka` | 8761 | — (service registry, Eureka server) | — |
 | `product/` | `product-service` | 8081 | PostgreSQL (JPA) | `/api/v1/products` |
 | `user/` | `user-service` | 8082 | MongoDB | `/api/v1/users` |
 | `order/` | `order-service` | 8083 | PostgreSQL (JPA + Flyway, schema `order_service` in db `postgres`) | `/api/v1/cart`, `/api/v1/orders` |
 
-Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4, Lombok, Spring Security, Actuator, Jackson 3 (`tools.jackson.*`), JUnit 5 + Mockito, Testcontainers. Base package: `com.ecommerce.<module>`.
+Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus, Netflix Eureka client + LoadBalancer), Lombok, Spring Security, Actuator, Jackson 3 (`tools.jackson.*`), JUnit 5 + Mockito, Testcontainers. Base package: `com.ecommerce.<module>`.
 
 ### Configuration
 - Services only contain `spring.application.name` and `spring.config.import: optional:configserver:http://localhost:8888` locally. **Real config lives in `config-server/src/main/resources/config/<application-name>.yml`** — edit there, not in the service.
 - Config server uses the `native` profile with an **absolute Windows path** in `config-server/src/main/resources/application.yml`. Git/JDBC backends and encryption are present but commented out.
 - Spring Cloud Bus + RabbitMQ is wired for config refresh.
+- `eureka/` keeps its own `application.yml` (not served by config-server). product/user/order register with it via `eureka.client.service-url.defaultZone: http://localhost:8761/eureka/` in their config-server files.
 - Environment variables expected (never hardcode values):
   - order: `DB_USERNAME`, `DB_PASSWORD`
   - product: `POSTGRES_URL`, `POSTGRES_USERNAME`, `POSTGRES_PASSWORD`
@@ -35,7 +37,7 @@ PostgreSQL 15 (5432), pgAdmin (5050), RabbitMQ + management (5672/15672), Promet
 Run from inside a module directory (`cd order`, etc.):
 ```bash
 docker compose up -d          # from repo root: infra
-./mvnw spring-boot:run        # start config-server first, then services
+./mvnw spring-boot:run        # start config-server and eureka first, then services
 ./mvnw test                   # unit + integration tests (Docker required for Testcontainers)
 ./mvnw -Dtest=CartServiceTest test   # single test class
 ./mvnw clean package
@@ -50,19 +52,32 @@ On Windows PowerShell use `.\mvnw.cmd`.
 - Errors: domain exceptions in `exception/` mapped by a module-level `@RestControllerAdvice GlobalExceptionHandler`.
 - Auditing via `AuditConfig` + `AuditorAwareImpl` (falls back to `"system"`).
 - Security: each module has a `SecurityConfig`; API and actuator paths are currently `permitAll`, CSRF disabled.
-- Order/cart endpoints identify the user with the `X-User-ID` request header.
-- No inter-service calls yet: `order` stores `userId`/`productId` as plain `Long`. `CartItem.price` / `OrderItem.price` are **unit prices** (placeholder `CartServiceImpl.PLACEHOLDER_UNIT_PRICE`); totals are always `price × quantity`. Old cross-module JPA code is left commented out.
+- Order/cart endpoints identify the user with the `X-User-ID` request header, a **`String`** (user-service MongoDB id). `order` stores `userId` as `String` (`varchar`, migration `V2`) and `productId` as `Long`; old cross-module JPA code is left commented out.
+
+### Inter-service calls (`order` → `product`, `user`)
+- Spring HTTP interfaces (`@HttpExchange`): `clients/ProductClient` (`GET /api/v1/products/{id}`) and `users/UserClient` (`GET /api/v1/users/{id}`). Parameters need `@PathVariable`.
+- Built in `config/ProductClientConfig` / `config/UserClientConfig` from a `@LoadBalanced RestClient.Builder` with Eureka names as base URL (`http://PRODUCT-SERVICE`, `http://USER-SERVICE`). `ProductClientConfig` also declares a **plain `@Primary` builder**: keep it, otherwise the Eureka client picks up the load-balanced builder and fails to register ("No instances available for localhost"). Inject the load-balanced one with `@LoadBalanced RestClient.Builder`.
+- DTOs deserialized from remote responses (`ProductResponse`, `UserResponse`, `AddressDTO`) need `@NoArgsConstructor` + `@AllArgsConstructor` next to `@Builder`, or Jackson fails (`RemoteResponseDeserializationTest`).
+- A remote 404 throws `HttpClientErrorException.NotFound` (not an empty `Optional`). `CartServiceImpl.findActiveProduct` / `findUser` turn it into `Optional.empty()`; other remote errors propagate (→ 500). product-service also returns inactive products, so `findActiveProduct` filters on `active`. `ProductNotFoundException` / `UserNotFoundException` → **404**.
+- Which operations call which service:
+  - `addToCart`: product (must be active, stock ≥ requested quantity — the quantity already in the cart is not counted) + user. Stores the product's current price.
+  - `removeFromCart`, `getUserCartItems`: user only (a deactivated/deleted product can still be removed).
+  - `clearCart`: **no remote call** — only called by `placeOrder`, which already checked the user via `getUserCartItems`. Do not add a remote call after the order is saved (a failure there would roll the order back).
+- `CartItem.price` / `OrderItem.price` are **unit prices**; totals are always `price × quantity`.
+- No timeout, retry or circuit breaker is configured on these clients.
 
 ### Test conventions
 - Unit: `@ExtendWith(MockitoExtension.class)`, `@Mock` / `@InjectMocks`.
 - Web slice: `@WebMvcTest(XController.class)` + `@MockitoBean`.
 - Integration/E2E: `@SpringBootTest @AutoConfigureMockMvc @ActiveProfiles("test") @Testcontainers` with a `PostgreSQLContainer` + `@DynamicPropertySource` (MongoDB container in `user`).
 - Tests run without the config-server, so each module's `src/test/resources/application-test.yaml` must set what the code relies on: `ddl-auto: create-drop` for `product`, the Flyway schema settings + `ddl-auto: validate` for `order` (tests run the real migrations), `spring.data.mongodb.auto-index-creation: true` for `user` (unique email index). Any `@SpringBootTest` must use `@ActiveProfiles("test")` and start its database container.
-- Packages mirror main: `controller`, `service`, `mapper`, `integration`, `e2e`.
+- product-service / user-service do not run during `order` tests: unit tests `@Mock` `ProductClient` / `UserClient`; `@SpringBootTest` tests replace them with `@MockitoBean` and stub them in `@BeforeEach` (product price `1000.00`, stock `100`).
+- Packages mirror main: `controller`, `service`, `mapper`, `dto`, `exception`, `integration`, `e2e`.
 - Method names: `method_shouldDoXWhenY`; bodies structured with `//given`, `//when`, `//then`.
 
 ### Repo notes
 - Root `README.md` and `HELP.md` describe the Claude Code toolkit, not the application.
+- `eureka/` is not tracked by git yet.
 - `config-server/src/main/resources/config-server.jks` is a keystore: do not read or reproduce its contents.
 
 ## First-session workflow

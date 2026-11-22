@@ -1,5 +1,9 @@
 package com.ecommerce.order.integration;
 
+import com.ecommerce.order.clients.ProductClient;
+import com.ecommerce.order.dto.ProductResponse;
+import com.ecommerce.order.dto.UserResponse;
+import com.ecommerce.order.users.UserClient;
 import com.ecommerce.order.domain.CartItem;
 import com.ecommerce.order.repository.CartItemRepository;
 import com.ecommerce.order.repository.OrderRepository;
@@ -15,6 +19,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -22,8 +27,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -63,8 +74,24 @@ class OrderIntegrationTest {
     @MockitoSpyBean
     private CartService cartService;
 
+    // product-service et user-service ne tournent pas pendant les tests
+    @MockitoBean
+    private ProductClient productClient;
+
+    @MockitoBean
+    private UserClient userClient;
+
     @BeforeEach
     void setUp() {
+        when(productClient.findByIdAndActiveTrue(anyLong())).thenAnswer(invocation -> Optional.of(ProductResponse.builder()
+                .id(invocation.getArgument(0))
+                .price(new BigDecimal("1000.00"))
+                .stock(100)
+                .active(true)
+                .build()));
+        when(userClient.getUserById(anyString())).thenAnswer(invocation -> Optional.of(UserResponse.builder()
+                .id(invocation.getArgument(0))
+                .build()));
         cartItemRepository.deleteAll();
         orderRepository.deleteAll();
     }
@@ -72,7 +99,7 @@ class OrderIntegrationTest {
     @Test
     void shouldAddToCartAndPlaceOrder() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         String cartItemJson = """
                 {
                     "productId": 100,
@@ -96,7 +123,7 @@ class OrderIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").exists())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
-                // 2 x placeholder unit price (1000)
+                // 2 x mocked product unit price (1000)
                 .andExpect(jsonPath("$.totalAmount").value(2000));
 
         //then - verify order was saved and cart was cleared
@@ -107,7 +134,7 @@ class OrderIntegrationTest {
     @Test
     void shouldGetCartItems() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         CartItem cartItem = CartItem.builder()
                 .userId(userId)
                 .productId(100L)
@@ -129,7 +156,7 @@ class OrderIntegrationTest {
     @Test
     void shouldRemoveFromCart() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         CartItem cartItem = CartItem.builder()
                 .userId(userId)
                 .productId(100L)
@@ -150,7 +177,7 @@ class OrderIntegrationTest {
     @Test
     void shouldReturnNoContentForEmptyCart() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
 
         //when & then
         mockMvc.perform(get("/api/v1/cart/items")
@@ -161,7 +188,7 @@ class OrderIntegrationTest {
     @Test
     void shouldUpdateQuantityWhenAddingExistingProduct() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         CartItem cartItem = CartItem.builder()
                 .userId(userId)
                 .productId(100L)
@@ -191,9 +218,51 @@ class OrderIntegrationTest {
     }
 
     @Test
+    void placeOrder_shouldCallUserServiceOnlyOnceBeforeSaving() throws Exception {
+        //given
+        String userId = "10";
+        cartItemRepository.save(CartItem.builder()
+                .userId(userId)
+                .productId(100L)
+                .quantity(2)
+                .price(new BigDecimal("1000.00"))
+                .build());
+
+        //when
+        mockMvc.perform(post("/api/v1/orders").header("X-User-ID", userId))
+                .andExpect(status().isCreated());
+
+        //then - no remote call after the order is saved, so a user-service failure cannot roll it back
+        verify(userClient, times(1)).getUserById(userId);
+        assertEquals(1, orderRepository.count());
+        assertTrue(cartItemRepository.findByUserId(userId).orElseThrow().isEmpty());
+    }
+
+    @Test
+    void placeOrder_shouldReturnNotFoundAndSaveNothingWhenUserNotFound() throws Exception {
+        //given
+        String userId = "10";
+        cartItemRepository.save(CartItem.builder()
+                .userId(userId)
+                .productId(100L)
+                .quantity(2)
+                .price(new BigDecimal("1000.00"))
+                .build());
+        when(userClient.getUserById(userId)).thenReturn(Optional.empty());
+
+        //when
+        mockMvc.perform(post("/api/v1/orders").header("X-User-ID", userId))
+                .andExpect(status().isNotFound());
+
+        //then
+        assertEquals(0, orderRepository.count());
+        assertEquals(1, cartItemRepository.findByUserId(userId).orElseThrow().size());
+    }
+
+    @Test
     void shouldRollbackOrderWhenClearingCartFails() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         cartItemRepository.save(CartItem.builder()
                 .userId(userId)
                 .productId(100L)
@@ -214,7 +283,7 @@ class OrderIntegrationTest {
     @Test
     void shouldRejectDuplicateCartLineForSameUserAndProduct() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         cartItemRepository.save(CartItem.builder()
                 .userId(userId)
                 .productId(100L)

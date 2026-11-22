@@ -18,6 +18,8 @@ public class ProductResponseMapper {
                 .image(product.getImage())
                 .price(product.getPrice())
                 .active(product.isActive())
+                .createdAt(product.getCreatedAt())
+                .updatedAt(product.getUpdatedAt())
                 .build();
     }
 }

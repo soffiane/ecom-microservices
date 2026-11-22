@@ -1,5 +1,9 @@
 package com.ecommerce.order.e2e;
 
+import com.ecommerce.order.clients.ProductClient;
+import com.ecommerce.order.dto.ProductResponse;
+import com.ecommerce.order.dto.UserResponse;
+import com.ecommerce.order.users.UserClient;
 import com.ecommerce.order.domain.CartItem;
 import com.ecommerce.order.domain.Order;
 import com.ecommerce.order.domain.OrderStatus;
@@ -14,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -21,7 +26,11 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -51,8 +60,24 @@ class OrderE2ETest {
     @Autowired
     private OrderRepository orderRepository;
 
+    // product-service et user-service ne tournent pas pendant les tests
+    @MockitoBean
+    private ProductClient productClient;
+
+    @MockitoBean
+    private UserClient userClient;
+
     @BeforeEach
     void setUp() {
+        when(productClient.findByIdAndActiveTrue(anyLong())).thenAnswer(invocation -> Optional.of(ProductResponse.builder()
+                .id(invocation.getArgument(0))
+                .price(new BigDecimal("1000.00"))
+                .stock(100)
+                .active(true)
+                .build()));
+        when(userClient.getUserById(anyString())).thenAnswer(invocation -> Optional.of(UserResponse.builder()
+                .id(invocation.getArgument(0))
+                .build()));
         cartItemRepository.deleteAll();
         orderRepository.deleteAll();
     }
@@ -61,7 +86,7 @@ class OrderE2ETest {
     @Transactional
     void completeOrderFlow_shouldWorkEndToEnd() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         
         // Step 1: Add first item to cart
         String firstItemJson = """
@@ -132,7 +157,7 @@ class OrderE2ETest {
     @Test
     void addRemoveAddPlaceOrder_shouldWorkEndToEnd() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         String itemJson = """
                 {
                     "productId": 100,
@@ -175,8 +200,8 @@ class OrderE2ETest {
     @Test
     void multipleUsers_shouldHaveSeparateCarts() throws Exception {
         //given
-        Long user1 = 10L;
-        Long user2 = 20L;
+        String user1 = "10";
+        String user2 = "20";
         String itemJson = """
                 {
                     "productId": 100,
@@ -222,7 +247,7 @@ class OrderE2ETest {
     @Transactional
     void updateQuantityByAddingSameProduct_shouldWorkEndToEnd() throws Exception {
         //given
-        Long userId = 10L;
+        String userId = "10";
         String itemJson = """
                 {
                     "productId": 100,
@@ -257,7 +282,7 @@ class OrderE2ETest {
         Order order = orderRepository.findAll().getFirst();
         assertEquals(1, order.getItems().size());
         assertEquals(4, order.getItems().getFirst().getQuantity());
-        // 4 x placeholder unit price (1000): quantity must not be applied twice
+        // 4 x mocked product unit price (1000): quantity must not be applied twice
         assertEquals(0, new BigDecimal("4000").compareTo(order.getTotalAmount()));
     }
 }

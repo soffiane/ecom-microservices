@@ -40,7 +40,7 @@ class CartControllerTest {
 
         cartItem = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .productId(100L)
                 .quantity(2)
                 .price(new BigDecimal("2000.00"))
@@ -50,7 +50,7 @@ class CartControllerTest {
     @Test
     void addToCart_shouldReturnCreatedStatus() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         doNothing().when(cartService).addToCart(userId, cartItemRequest);
 
         //when
@@ -64,7 +64,7 @@ class CartControllerTest {
     @Test
     void removeFromCart_shouldReturnNoContentStatus() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         Long productId = 100L;
         doNothing().when(cartService).removeFromCart(userId, productId);
 
@@ -79,7 +79,7 @@ class CartControllerTest {
     @Test
     void getCartForUser_shouldReturnCartItemsWhenExists() {
         //given
-        Long userId = 10L;
+        String userId = "";
         List<CartItem> cartItems = List.of(cartItem);
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.of(cartItems));
 
@@ -96,7 +96,7 @@ class CartControllerTest {
     @Test
     void getCartForUser_shouldReturnNoContentWhenEmpty() {
         //given
-        Long userId = 10L;
+        String userId = "10";
         when(cartService.getUserCartItems(userId)).thenReturn(Optional.empty());
 
         //when

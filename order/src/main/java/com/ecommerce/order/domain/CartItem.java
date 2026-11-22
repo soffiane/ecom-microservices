@@ -32,7 +32,7 @@ public class CartItem {
     @ManyToOne
     @JoinColumn(name = "product_id")
     private Product product;*/
-    private Long userId;
+    private String userId;
     private Long productId;
 
     private Integer quantity;

@@ -33,13 +33,16 @@ public class OrderController {
                     + "unit price x quantity, saves the order with status CONFIRMED and empties the cart. "
                     + "No stock reservation, payment or product/user check is performed. Not idempotent.")
     @ApiResponse(responseCode = "201", description = "Order created")
-    @ApiResponse(responseCode = "400", description = "The cart is empty, or X-User-ID is missing/not a number",
+    @ApiResponse(responseCode = "400", description = "The cart is empty, or X-User-ID is missing",
             content = @Content(mediaType = "text/plain",
                     schema = @Schema(type = "string", example = "Cart not found or empty")))
+    @ApiResponse(responseCode = "404", description = "User not found in user-service",
+            content = @Content(mediaType = "text/plain",
+                    schema = @Schema(type = "string", example = "User not found")))
     public ResponseEntity<OrderResponse> placeOrder(
             @Parameter(in = ParameterIn.HEADER, required = true,
                     description = "Id of the calling user. Not authenticated: the value is trusted as sent.")
-            @RequestHeader("X-User-ID") Long userId) {
+            @RequestHeader("X-User-ID") String userId) {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(orderService.placeOrder(userId));

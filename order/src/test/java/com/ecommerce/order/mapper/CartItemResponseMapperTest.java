@@ -15,7 +15,7 @@ class CartItemResponseMapperTest {
         //given
         CartItem cartItem = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .productId(100L)
                 .quantity(2)
                 .price(new BigDecimal("2000.00"))
@@ -27,7 +27,7 @@ class CartItemResponseMapperTest {
         //then
         assertNotNull(result);
         assertEquals(1L, result.id());
-        assertEquals(10L, result.userId());
+        assertEquals("10", result.userId());
         assertEquals(100L, result.productId());
         assertEquals(2, result.quantity());
         assertEquals(new BigDecimal("2000.00"), result.price());
@@ -38,7 +38,7 @@ class CartItemResponseMapperTest {
         //given
         CartItem cartItem = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .productId(100L)
                 .quantity(0)
                 .price(BigDecimal.ZERO)
@@ -58,7 +58,7 @@ class CartItemResponseMapperTest {
         //given
         CartItem cartItem = CartItem.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .productId(100L)
                 .quantity(1000)
                 .price(new BigDecimal("1000000.00"))

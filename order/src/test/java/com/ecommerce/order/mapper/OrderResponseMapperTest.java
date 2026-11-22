@@ -35,7 +35,7 @@ class OrderResponseMapperTest {
 
         Order order = Order.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .status(OrderStatus.CONFIRMED)
                 .items(List.of(orderItem))
                 .totalAmount(new BigDecimal("100.00"))
@@ -68,7 +68,7 @@ class OrderResponseMapperTest {
         //given
         Order order = Order.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .status(OrderStatus.PENDING)
                 .items(List.of())
                 .totalAmount(BigDecimal.ZERO)
@@ -104,7 +104,7 @@ class OrderResponseMapperTest {
 
         Order order = Order.builder()
                 .id(1L)
-                .userId(10L)
+                .userId("10")
                 .status(OrderStatus.CONFIRMED)
                 .items(List.of(item1, item2))
                 .totalAmount(new BigDecimal("130.00"))

@@ -3,5 +3,5 @@ package com.ecommerce.order.service;
 import com.ecommerce.order.dto.OrderResponse;
 
 public interface OrderService {
-    OrderResponse placeOrder(Long userId);
+    OrderResponse placeOrder(String userId);
 }
