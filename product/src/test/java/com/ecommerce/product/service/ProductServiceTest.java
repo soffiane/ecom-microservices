@@ -106,7 +106,7 @@ class ProductServiceTest {
     @Test
     void findProductById_shouldReturnProductWhenExists() {
         //given
-        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+        when(productRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(product));
 
         //when
         Optional<Product> result = productService.findProductById(1L);
@@ -115,20 +115,20 @@ class ProductServiceTest {
         assertTrue(result.isPresent());
         assertEquals(1L, result.get().getId());
         assertEquals("Laptop", result.get().getName());
-        verify(productRepository).findById(1L);
+        verify(productRepository).findByIdAndActiveTrue(1L);
     }
 
     @Test
     void findProductById_shouldReturnEmptyWhenNotExists() {
         //given
-        when(productRepository.findById(999L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndActiveTrue(999L)).thenReturn(Optional.empty());
 
         //when
         Optional<Product> result = productService.findProductById(999L);
 
         //then
         assertFalse(result.isPresent());
-        verify(productRepository).findById(999L);
+        verify(productRepository).findByIdAndActiveTrue(999L);
     }
 
     @Test
@@ -141,17 +141,6 @@ class ProductServiceTest {
                 .category("Electronics")
                 .stock(15)
                 .image("laptop-pro.jpg")
-                .build();
-
-        Product updatedProduct = Product.builder()
-                .id(1L)
-                .name("Laptop Pro")
-                .description("Updated high performance laptop")
-                .price(new BigDecimal("1099.99"))
-                .category("Electronics")
-                .quantity(15)
-                .image("laptop-pro.jpg")
-                .active(true)
                 .build();
 
         when(productRepository.findById(1L)).thenReturn(Optional.of(product));
@@ -211,5 +200,42 @@ class ProductServiceTest {
         verify(productRepository).findById(999L);
         verify(productRepository, never()).save(any(Product.class));
         verify(productRequestMapper, never()).mapToProductRequest(any());
+    }
+
+    @Test
+    void searchProducts_shouldReturnMatchingProducts() {
+        //given
+        when(productRepository.searchProducts("Lap")).thenReturn(List.of(product));
+
+        //when
+        List<Product> result = productService.searchProducts("Lap");
+
+        //then
+        assertEquals(List.of(product), result);
+        verify(productRepository).searchProducts("Lap");
+    }
+
+    @Test
+    void deleteProduct_shouldDeleteWhenExists() {
+        //given
+        when(productRepository.findById(1L)).thenReturn(Optional.of(product));
+
+        //when
+        productService.deleteProduct(1L);
+
+        //then
+        verify(productRepository).deleteById(1L);
+    }
+
+    @Test
+    void deleteProduct_shouldThrowExceptionWhenNotExists() {
+        //given
+        when(productRepository.findById(999L)).thenReturn(Optional.empty());
+
+        //when
+        //then
+        ProductNotFoundException exception = assertThrows(ProductNotFoundException.class, () -> productService.deleteProduct(999L));
+        assertEquals("Product with id 999 not found", exception.getMessage());
+        verify(productRepository, never()).deleteById(any());
     }
 }

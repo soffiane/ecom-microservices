@@ -67,4 +67,21 @@ class ProductRequestMapperTest {
         assertEquals(0, result.getQuantity());
         assertNull(result.getImage());
     }
+
+    @Test
+    void mapToProductRequest_shouldDefaultStockToZeroWhenStockNotProvided() {
+        //given
+        ProductRequest productRequest = ProductRequest.builder()
+                .name("Laptop")
+                .price(new BigDecimal("999.99"))
+                .stock(null)
+                .build();
+
+        //when
+        Product result = productRequestMapper.mapToProductRequest(productRequest);
+
+        //then
+        assertEquals(0, result.getQuantity());
+        assertTrue(result.isActive());
+    }
 }

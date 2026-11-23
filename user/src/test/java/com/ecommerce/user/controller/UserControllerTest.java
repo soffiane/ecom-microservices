@@ -67,7 +67,6 @@ class UserControllerTest {
                 .lastName("Doe")
                 .email("john.doe@example.com")
                 .phone("1234567890")
-                .role(UserRole.CUSTOMER)
                 .build());
         when(userResponseMapper.mapToUserResponse(user2)).thenReturn(UserResponse.builder()
                 .id("2")
@@ -75,7 +74,6 @@ class UserControllerTest {
                 .lastName("Doe")
                 .email("jane.doe@example.com")
                 .phone("0987654321")
-                .role(UserRole.CUSTOMER)
                 .build());
         //then
         mockMvc.perform(get("/api/v1/users"))
@@ -92,8 +90,8 @@ class UserControllerTest {
                 .andExpect(jsonPath("$[1].email").value("jane.doe@example.com"))
                 .andExpect(jsonPath("$[0].phone").value("1234567890"))
                 .andExpect(jsonPath("$[1].phone").value("0987654321"))
-                .andExpect(jsonPath("$[0].role").value("CUSTOMER"))
-                .andExpect(jsonPath("$[1].role").value("CUSTOMER"))
+                .andExpect(jsonPath("$[0].role").doesNotExist())
+                .andExpect(jsonPath("$[1].role").doesNotExist())
                 .andReturn().getResponse().getContentAsString();
     }
 
@@ -106,7 +104,6 @@ class UserControllerTest {
                 .lastName("Doe")
                 .email("john.doe@example.com")
                 .phone("1234567890")
-                .role(UserRole.CUSTOMER)
                 .build();
 
         when(userService.addUser(any(UserRequest.class))).thenReturn(userResponse);
@@ -122,7 +119,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.lastName").value("Doe"))
                 .andExpect(jsonPath("$.email").value("john.doe@example.com"))
                 .andExpect(jsonPath("$.phone").value("1234567890"))
-                .andExpect(jsonPath("$.role").value("CUSTOMER"));
+                .andExpect(jsonPath("$.role").doesNotExist());
 
         verify(userService).addUser(any(UserRequest.class));
     }
@@ -145,7 +142,6 @@ class UserControllerTest {
                 .lastName("Doe")
                 .email("john.doe@example.com")
                 .phone("1234567890")
-                .role(UserRole.CUSTOMER)
                 .build();
 
         when(userService.findById("1")).thenReturn(java.util.Optional.of(user));
@@ -160,7 +156,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.lastName").value("Doe"))
                 .andExpect(jsonPath("$.email").value("john.doe@example.com"))
                 .andExpect(jsonPath("$.phone").value("1234567890"))
-                .andExpect(jsonPath("$.role").value("CUSTOMER"));
+                .andExpect(jsonPath("$.role").doesNotExist());
     }
 
     @Test
@@ -199,7 +195,6 @@ class UserControllerTest {
                 .lastName("Smith")
                 .email("john.smith@example.com")
                 .phone("1234567890")
-                .role(UserRole.CUSTOMER)
                 .build();
 
         when(userService.updateUser("1", userRequest)).thenReturn(java.util.Optional.of(updatedUser));
@@ -216,7 +211,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.lastName").value("Smith"))
                 .andExpect(jsonPath("$.email").value("john.smith@example.com"))
                 .andExpect(jsonPath("$.phone").value("1234567890"))
-                .andExpect(jsonPath("$.role").value("CUSTOMER"));
+                .andExpect(jsonPath("$.role").doesNotExist());
     }
 
     @Test

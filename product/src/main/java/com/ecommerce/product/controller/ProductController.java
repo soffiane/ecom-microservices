@@ -52,9 +52,9 @@ public class ProductController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get a product by id",
-            description = "Returns the product whatever its `active` flag.")
+            description = "Returns the product only if it is active; an inactive product gives 404.")
     @ApiResponse(responseCode = "200", description = "Product found")
-    @ApiResponse(responseCode = "404", description = "No product with this id", content = @Content)
+    @ApiResponse(responseCode = "404", description = "No active product with this id", content = @Content)
     public ResponseEntity<ProductResponse> getProductById(@Parameter(description = "Product id") @PathVariable Long id) {
         return productService.findProductById(id)
                 .map(productResponseMapper::mapToProductResponse)

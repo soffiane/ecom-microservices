@@ -2,7 +2,6 @@ package com.ecommerce.user.service;
 
 import com.ecommerce.user.dto.UserRequest;
 import com.ecommerce.user.dto.UserResponse;
-import com.ecommerce.user.mapper.AddressMapper;
 import com.ecommerce.user.mapper.UserRequestMapper;
 import com.ecommerce.user.mapper.UserResponseMapper;
 import com.ecommerce.user.model.User;
@@ -33,9 +32,6 @@ class UserServiceTest {
 
     @Mock
     private UserRequestMapper userRequestMapper;
-
-    @Mock
-    private AddressMapper addressMapper;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -69,7 +65,6 @@ class UserServiceTest {
                 .lastName("Doe")
                 .email("john.doe@example.com")
                 .phone("1234567890")
-                .role(UserRole.CUSTOMER)
                 .build();
     }
 

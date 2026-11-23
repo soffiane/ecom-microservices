@@ -50,7 +50,6 @@ class UserResponseMapperTest {
         assertEquals("Doe", result.getLastName());
         assertEquals("john.doe@example.com", result.getEmail());
         assertEquals("1234567890", result.getPhone());
-        assertEquals(UserRole.CUSTOMER, result.getRole());
         assertNotNull(result.getAddress());
         assertEquals("123 Main St", result.getAddress().getStreet());
         assertEquals("New York", result.getAddress().getCity());

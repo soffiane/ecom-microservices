@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -308,5 +309,49 @@ class ProductControllerTest {
                 .andExpect(status().isBadRequest());
 
         verify(productService, never()).createProduct(any());
+    }
+
+    @Test
+    void shouldDeleteProduct() throws Exception {
+        //when & then
+        mockMvc.perform(delete("/api/v1/products/1"))
+                .andExpect(status().isNoContent());
+        verify(productService).deleteProduct(1L);
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenDeletingNonExistentProduct() throws Exception {
+        //given
+        doThrow(new ProductNotFoundException("Product with id 999 not found"))
+                .when(productService).deleteProduct(999L);
+
+        //when & then
+        mockMvc.perform(delete("/api/v1/products/999"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void shouldSearchProductsByName() throws Exception {
+        //given
+        Product product = Product.builder().id(1L).name("Laptop").active(true).build();
+        ProductResponse productResponse = ProductResponse.builder().id(1L).name("Laptop").active(true).build();
+        when(productService.searchProducts("Lap")).thenReturn(List.of(product));
+        when(productResponseMapper.mapToProductResponse(product)).thenReturn(productResponse);
+
+        //when & then
+        mockMvc.perform(get("/api/v1/products/search").param("name", "Lap"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Laptop"));
+    }
+
+    @Test
+    void shouldReturnNotFoundWhenSearchMatchesNothing() throws Exception {
+        //given
+        when(productService.searchProducts("Unknown")).thenReturn(List.of());
+
+        //when & then
+        mockMvc.perform(get("/api/v1/products/search").param("name", "Unknown"))
+                .andExpect(status().isNotFound());
     }
 }

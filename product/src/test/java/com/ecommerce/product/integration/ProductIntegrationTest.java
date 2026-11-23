@@ -80,7 +80,7 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.stock").value(10));
 
         //then - verify product was saved
-        Product savedProduct = productRepository.findAll().get(0);
+        Product savedProduct = productRepository.findAll().getFirst();
         assertEquals("Laptop", savedProduct.getName());
         assertEquals(new BigDecimal("999.99"), savedProduct.getPrice());
     }
@@ -141,6 +141,24 @@ class ProductIntegrationTest {
                 .andExpect(jsonPath("$.id").value(savedProduct.getId()))
                 .andExpect(jsonPath("$.name").value("Laptop"))
                 .andExpect(jsonPath("$.price").value(999.99));
+    }
+
+    @Test
+    @WithMockUser
+    void getProductById_shouldReturnNotFoundWhenProductIsInactive() throws Exception {
+        //given
+        Product savedProduct = productRepository.save(Product.builder()
+                .name("Old laptop")
+                .description("Discontinued")
+                .price(new BigDecimal("499.99"))
+                .category("Electronics")
+                .quantity(10)
+                .active(false)
+                .build());
+
+        //when & then
+        mockMvc.perform(get("/api/v1/products/" + savedProduct.getId()))
+                .andExpect(status().isNotFound());
     }
 
     @Test
