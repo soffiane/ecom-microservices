@@ -1,0 +1,20 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://gateway:3100
+    jsonData:
+      # Loki est multi-tenant (auth_enabled non défini) : même tenant que loki.write dans alloy-local-config.yaml
+      httpHeaderName1: "X-Scope-OrgID"
+    secureJsonData:
+      httpHeaderValue1: "tenant1"
+
+  - name: Prometheus
+    # uid fixe : les dashboards le référencent, il ne doit pas changer d'un redémarrage à l'autre
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true

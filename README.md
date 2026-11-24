@@ -1,109 +1,161 @@
-# Claude Code Developer Toolkit
+# E-commerce microservices
 
-A reusable, technology-agnostic starter kit for Claude Code. It includes project guidance, six focused Skills, and three specialized subagents.
+Backend e-commerce découpé en microservices Spring Boot : catalogue produits, utilisateurs, panier et commandes, avec configuration centralisée, découverte de services, logs, métriques et traces distribuées.
 
-## Contents
+## Architecture
 
 ```text
-.
-├── CLAUDE.md
-├── README.md
-└── .claude/
-    ├── agents/
-    │   ├── software-architect.md
-    │   ├── code-reviewer.md
-    │   └── test-engineer.md
-    └── skills/
-        ├── api-documentation/SKILL.md
-        ├── architecture-analysis/SKILL.md
-        ├── code-review/SKILL.md
-        ├── refactoring/SKILL.md
-        ├── technical-spec/SKILL.md
-        └── unit-tests/SKILL.md
+                 ┌──────────────┐      ┌──────────────┐
+                 │ config-server│      │    eureka    │
+                 │    :8888     │      │    :8761     │
+                 └──────┬───────┘      └──────┬───────┘
+          config (au démarrage)        enregistrement / découverte
+        ┌───────────────┼─────────────────────┼───────────────┐
+        ▼               ▼                     ▼               ▼
+ ┌─────────────┐ ┌─────────────┐       ┌─────────────┐
+ │ product     │ │ user        │◄──────│ order       │
+ │ :8081       │ │ :8082       │  HTTP │ :8083       │
+ │ PostgreSQL  │ │ MongoDB     │       │ PostgreSQL  │
+ └─────────────┘ └─────────────┘       └──────┬──────┘
+        ▲                                     │ HTTP (load-balancé via Eureka)
+        └─────────────────────────────────────┘
 ```
 
-## Install in a project
+| Module | Nom applicatif | Port | Stockage | API |
+|---|---|---|---|---|
+| `config-server/` | `config-server` | 8888 | fichiers YAML (`config/`) | — |
+| `eureka/` | `eureka` | 8761 | — | tableau de bord Eureka |
+| `product/` | `product-service` | 8081 | PostgreSQL (JPA) | `/api/v1/products` |
+| `user/` | `user-service` | 8082 | MongoDB | `/api/v1/users` |
+| `order/` | `order-service` | 8083 | PostgreSQL (JPA + Flyway, schéma `order_service`) | `/api/v1/cart`, `/api/v1/orders` |
 
-1. Back up any existing `CLAUDE.md` and `.claude/` directory.
-2. Copy `CLAUDE.md` and the `.claude/` directory into the root of your repository.
-3. If those files already exist, merge their contents instead of overwriting them.
-4. Open Claude Code from the repository root:
+Chaque module est un **projet Maven indépendant** avec son propre `mvnw` (pas de POM parent).
 
-   ```bash
-   cd path/to/your-project
-   claude
-   ```
+**Stack** : Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus/RabbitMQ, Netflix Eureka, LoadBalancer), Spring Security, Spring Data JPA / MongoDB, Flyway, springdoc-openapi, Micrometer (Prometheus + Tracing Brave/Zipkin), Lombok, Jackson 3, JUnit 5, Mockito, Testcontainers.
 
-5. Ask Claude to inspect the repository and summarize the detected stack and conventions.
-6. Try a Skill with its slash command, for example `/architecture-analysis` or `/code-review`.
+## Démarrage
 
-Project Skills live in `.claude/skills/<skill-name>/SKILL.md`. Project subagents live in `.claude/agents/<agent-name>.md`.
+### Prérequis
+- JDK 21, Docker (obligatoire aussi pour les tests : Testcontainers).
+- Une instance MongoDB sur `localhost:27017` pour `user-service` (le service MongoDB du `docker-compose.yaml` est commenté).
 
-## Suggested first prompts
+### Variables d'environnement
 
-### Understand the repository
+| Service | Variables |
+|---|---|
+| order | `DB_USERNAME`, `DB_PASSWORD` |
+| product | `POSTGRES_URL`, `POSTGRES_USERNAME`, `POSTGRES_PASSWORD` |
+| user | `MONGODB_URI` (défaut : `mongodb://localhost:27017/user`) |
 
-> Inspect this repository without modifying files. Detect the language, frameworks, build and test commands, architecture, entry points, and conventions. Give me a concise technical overview and list uncertainties.
+### Ordre de lancement
 
-### Generate documentation
+```bash
+docker compose up -d                 # racine : PostgreSQL 16, pgAdmin, RabbitMQ
+(cd loki && docker compose up -d)    # observabilité : Loki, Alloy, Prometheus, Grafana, Zipkin
 
-> Use `/api-documentation` to inspect the actual API implementation and update API documentation. Do not invent endpoints or schemas. List any information that cannot be verified from the code.
+cd config-server && ./mvnw spring-boot:run   # 1. configuration
+cd eureka        && ./mvnw spring-boot:run   # 2. registre de services
+cd product       && ./mvnw spring-boot:run   # 3. puis les services, dans n'importe quel ordre
+cd user          && ./mvnw spring-boot:run
+cd order         && ./mvnw spring-boot:run
+```
 
-### Review a change
+Sous Windows PowerShell : `.\mvnw.cmd`. Lancer les services depuis la racine du dépôt si l'on veut que leurs logs arrivent dans `logs/` (lu par Alloy).
 
-> Review the current Git diff using `/code-review`. Do not edit files. Prioritize correctness, security, regressions, and missing tests. Report findings with file and line references.
+### Configuration
+- Les services ne contiennent que leur nom et `spring.config.import: optional:configserver:http://localhost:8888`. **La vraie configuration est dans `config-server/src/main/resources/config/<nom>-service.yml`.**
+- Le config-server tourne en profil `native` sur un chemin absolu : une modification des YAML est servie sans redémarrer le config-server (les services, eux, doivent être redémarrés ou rafraîchis via Spring Cloud Bus).
+- `order-service` n'a besoin d'aucune préparation de base : Flyway crée le schéma `order_service` et applique `order/src/main/resources/db/migration` (`V1` tables panier/commandes, `V2` `user_id` en `varchar`).
 
-### Add tests
+## API
 
-> Use `/unit-tests` to identify important untested behavior in the service I specify. Propose a test plan first, then implement tests using the repository's existing test framework.
+Swagger UI sur chaque service : `http://localhost:<port>/swagger-ui.html` (spec : `/v3/api-docs`).
 
-### Plan a feature
+### product-service (`/api/v1/products`)
+| Méthode | Chemin | Description |
+|---|---|---|
+| GET | `/` | Produits actifs |
+| POST | `/` | Créer un produit (`stock` à 0 par défaut) |
+| GET | `/{id}` | Produit actif par id (404 si inexistant ou inactif) |
+| PUT | `/{id}` | Remplacer un produit |
+| DELETE | `/{id}` | Supprimer (suppression physique) |
+| GET | `/search?name=` | Recherche par nom (actifs, en stock) ; 404 si aucun résultat |
 
-> Use `/technical-spec` to turn this feature request into a technical specification. Inspect the existing code first, identify assumptions and open questions, and do not implement it yet.
+### user-service (`/api/v1/users`)
+| Méthode | Chemin | Description |
+|---|---|---|
+| GET | `/` | Liste des utilisateurs |
+| POST | `/` | Créer un utilisateur (email unique) |
+| GET | `/{id}` | Utilisateur par id |
+| PUT | `/{id}` | Remplacer un utilisateur (adresse comprise) |
 
-## What each component does
+### order-service (`/api/v1/cart`, `/api/v1/orders`)
+L'utilisateur est identifié par l'en-tête **`X-User-ID`** (id MongoDB de user-service).
 
-### CLAUDE.md
-Persistent project context: commands, architecture facts, conventions, safety rules, and verification expectations. Keep it concise and project-specific.
+| Méthode | Chemin | Description |
+|---|---|---|
+| POST | `/api/v1/cart` | Ajouter un produit au panier (vérifie produit actif, stock, utilisateur) |
+| DELETE | `/api/v1/cart/items/{productId}` | Retirer une ligne du panier |
+| GET | `/api/v1/cart/items` | Contenu du panier |
+| POST | `/api/v1/orders` | Passer commande à partir du panier, puis le vider |
 
-### Skills
-Reusable procedures invoked as slash commands or selected automatically when relevant:
-- `/api-documentation`
-- `/architecture-analysis`
-- `/code-review`
-- `/refactoring`
-- `/technical-spec`
-- `/unit-tests`
+Les prix stockés sont **unitaires** ; les totaux sont calculés `prix × quantité`. Produit ou utilisateur introuvable → 404.
 
-### Subagents
-Specialized assistants Claude can delegate bounded tasks to:
-- `software-architect`: architecture and design analysis.
-- `code-reviewer`: independent, read-only review.
-- `test-engineer`: test strategy and test implementation.
+## Communication entre services avant Eureka
+![img_1.png](img_1.png)
 
-## Customize for your stack
+## Communication entre services avec Eureka
+- `order` appelle `product` et `user` via des **interfaces HTTP Spring** (`@HttpExchange`) construites sur un `RestClient` **`@LoadBalanced`** : les URL `http://PRODUCT-SERVICE` / `http://USER-SERVICE` sont résolues par Eureka.
+- Un builder `RestClient` `@Primary` non load-balancé est déclaré à part : sans lui le client Eureka utiliserait le builder load-balancé et ne pourrait pas s'enregistrer.
+- Un 404 distant (`HttpClientErrorException.NotFound`) est converti en « introuvable » ; les autres erreurs distantes remontent en 500.
+- `@LoadBalanced` ne répartit que les appels **sortants** d'order. Une API gateway (Spring Cloud Gateway) est prévue pour répartir le trafic entrant.
+- Pas de timeout, retry ni circuit breaker pour l'instant.
+![img_2.png](img_2.png)
 
-This kit intentionally does not assume a particular language or framework. After installation, ask Claude to inspect the repository and propose project-specific additions to `CLAUDE.md`, including:
-- exact build, test, lint, and formatting commands;
-- architectural boundaries and naming conventions;
-- database and migration practices;
-- API conventions and error formats;
-- security and deployment constraints.
+## Observabilité (`loki/`)
 
-Review those proposed changes before accepting them.
+| Outil | URL | Rôle |
+|---|---|---|
+| Grafana | http://localhost:3000 | Tableaux de bord (accès anonyme admin) |
+| Prometheus | http://localhost:9090 | Métriques (`/actuator/prometheus` des 3 services, toutes les 3 s) |
+| Loki (gateway) | http://localhost:3100 | Logs, stockage `filesystem` (volume `loki-data`) |
+| Alloy | http://localhost:12345 | Collecte des logs (fichiers `logs/*.log` + conteneurs Docker) → Loki (tenant `tenant1`) |
+| Zipkin | http://localhost:9411 | Traces distribuées |
 
-## Safety notes
+- **Logs** : chaque service écrit `logs/<nom>-service.log` avec rotation par taille et par date (le motif d'archive doit contenir `%i`).
+![img.png](img.png)
+- **Grafana** : datasources Loki et Prometheus provisionnées depuis `loki/datasources/datasources.yml` (Prometheus a l'uid fixe `prometheus`). Les dashboards sont importés depuis l'interface et conservés dans le volume `grafana-data`. Pour un dashboard grafana.com (ex. 4701 « JVM (Micrometer) »), remplacer `${DS_PROMETHEUS}` par `prometheus` dans le JSON Model si l'import ne demande pas la datasource.
+- **Traces** : échantillonnage à 100 %, envoi vers Zipkin. Les endpoints `/actuator/**` sont exclus du tracing (`config/ObservationConfig` dans chaque service). Dans Zipkin, filtrer par service ou par nom de span.
+![img_3.png](img_3.png)
+- Limite connue : les appels order → product/user n'apparaissent pas encore dans la même trace (le builder load-balancé n'a pas d'`observationRegistry`).
 
-- Review all generated changes before committing.
-- Keep secrets out of prompts, Skills, and `CLAUDE.md`.
-- Review third-party Skills and scripts before using them.
-- Keep deployments, production changes, destructive operations, and external side effects behind explicit approval.
-- Use Git branches and commits so changes are easy to inspect and revert.
+## Tests
 
-## Official references
+```bash
+cd <module> && ./mvnw test                     # unitaires + intégration (Docker requis)
+./mvnw -Dtest=CartServiceTest test             # une classe
+```
 
-- Claude Code documentation: https://code.claude.com/docs
-- Skills: https://code.claude.com/docs/en/skills
-- Subagents: https://code.claude.com/docs/en/sub-agents
-- Memory / CLAUDE.md: https://code.claude.com/docs/en/memory
-- Security: https://code.claude.com/docs/en/security
+- Unitaires (Mockito), tranches web (`@WebMvcTest`), intégration/E2E (`@SpringBootTest` + Testcontainers PostgreSQL / MongoDB, profil `test`, sans config-server).
+- Dans `order`, `ProductClient` et `UserClient` sont mockés : product-service et user-service n'ont pas besoin de tourner.
+- Couverture mesurée avec JaCoCo à **100 % des lignes et des branches** sur order, product et user (plugin non déclaré dans les POM) :
+  ```bash
+  ./mvnw clean org.jacoco:jacoco-maven-plugin:0.8.12:prepare-agent test org.jacoco:jacoco-maven-plugin:0.8.12:report
+  # rapport : target/site/jacoco/index.html
+  ```
+
+## Historique du projet
+1. **Socle** : monorepo de microservices product / user / order, configuration centralisée avec Spring Cloud Config (+ Bus RabbitMQ).
+2. **Revue de code** et corrections.
+3. **Documentation d'API** avec springdoc (Swagger UI) et **migrations Flyway** pour order (schéma `order_service`, `ddl-auto: validate`).
+4. **Découverte de services Eureka** et communication inter-services : order appelle product et user via `RestClient` load-balancé ; identifiant utilisateur passé en `String` (migration `V2`) ; gestion des 404 distants ; prix unitaires.
+5. **Couverture de tests à 100 %** (lignes et branches) sur les trois services.
+6. **Observabilité** : Loki + Alloy (stockage passé de MinIO au filesystem), Prometheus + Grafana (datasources provisionnées, uid fixe), correction de la rotation des logs (`%i`).
+7. **Traces distribuées** avec Micrometer Tracing + Zipkin, endpoints actuator exclus du tracing.
+
+## À venir / points ouverts
+- API gateway (Spring Cloud Gateway) pour le trafic entrant.
+- Relier les appels order → product/user dans une même trace.
+- Sécurité : les endpoints API et actuator (dont `shutdown`) sont en `permitAll`.
+- Résilience des appels inter-services (timeouts, retry, circuit breaker).
+- Le contrôle de stock à l'ajout au panier ne tient pas compte de la quantité déjà dans le panier.

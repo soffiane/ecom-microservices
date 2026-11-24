@@ -2,6 +2,7 @@ package com.ecommerce.user.service;
 
 import com.ecommerce.user.dto.UserRequest;
 import com.ecommerce.user.dto.UserResponse;
+import com.ecommerce.user.mapper.AddressMapper;
 import com.ecommerce.user.mapper.UserRequestMapper;
 import com.ecommerce.user.mapper.UserResponseMapper;
 import com.ecommerce.user.model.User;
@@ -32,6 +33,9 @@ class UserServiceTest {
 
     @Mock
     private UserRequestMapper userRequestMapper;
+
+    @Mock
+    private AddressMapper addressMapper;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -163,6 +167,7 @@ class UserServiceTest {
         assertEquals("Smith", result.get().getLastName());
         assertEquals("john.smith@example.com", result.get().getEmail());
         verify(userRepository).findById("1");
+        verify(addressMapper).mapToAddress(updateRequest.getAddress());
         verify(userRepository).save(any(User.class));
     }
 

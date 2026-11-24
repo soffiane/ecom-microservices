@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/users")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Users", description = "User account management")
 public class UserController {
 
@@ -31,6 +33,7 @@ public class UserController {
     @Operation(summary = "List users", description = "Returns every user. No pagination, filtering or sorting.")
     @ApiResponse(responseCode = "200", description = "List of users (possibly empty)")
     public ResponseEntity<List<UserResponse>> getAllUsers() {
+        log.info("Getting all users");
         return ResponseEntity.status(HttpStatus.OK).body((userService.findAll())
                 .stream()
                 .map(userResponseMapper::mapToUserResponse)
@@ -47,6 +50,7 @@ public class UserController {
             content = @Content(mediaType = "text/plain",
                     schema = @Schema(type = "string", example = "Email already exists")))
     public ResponseEntity<UserResponse> createUser(@RequestBody @Valid UserRequest user) {
+        log.info("Creating user with email {}", user.getEmail());
         return ResponseEntity.status(HttpStatus.CREATED).body(userService.addUser(user));
     }
 
@@ -55,6 +59,7 @@ public class UserController {
     @ApiResponse(responseCode = "200", description = "User found")
     @ApiResponse(responseCode = "404", description = "No user with this id", content = @Content)
     public ResponseEntity<UserResponse> getUserById(@Parameter(description = "User id (MongoDB ObjectId string)") @PathVariable String id) {
+        log.info("Getting user with id {}", id);
         return userService.findById(id)
                 .map(userResponseMapper::mapToUserResponse)
                 .map(ResponseEntity::ok)
@@ -73,6 +78,7 @@ public class UserController {
                     schema = @Schema(type = "string", example = "Email already exists")))
     public ResponseEntity<UserResponse> updateUser(@Parameter(description = "User id (MongoDB ObjectId string)") @PathVariable String id,
                                                    @RequestBody @Valid UserRequest user) {
+        log.info("Updating user with id {}", id);
         return userService.updateUser(id, user)
                 .map(userResponseMapper::mapToUserResponse)
                 .map(ResponseEntity::ok)
