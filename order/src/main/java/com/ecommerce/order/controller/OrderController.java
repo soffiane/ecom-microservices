@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1/orders")
+@Slf4j
 @Tag(name = "Orders", description = "Orders of the user identified by the X-User-ID header")
 public class OrderController {
 
@@ -43,6 +45,7 @@ public class OrderController {
             @Parameter(in = ParameterIn.HEADER, required = true,
                     description = "Id of the calling user. Not authenticated: the value is trusted as sent.")
             @RequestHeader("X-User-ID") String userId) {
+        log.info("Placing order for user {}", userId);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(orderService.placeOrder(userId));

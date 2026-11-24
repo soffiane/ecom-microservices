@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,6 +20,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/products")
+@Slf4j
 @Tag(name = "Products", description = "Product catalog management")
 public class ProductController {
 
@@ -35,6 +37,7 @@ public class ProductController {
             description = "Returns every product whose `active` flag is true. No pagination, filtering or sorting.")
     @ApiResponse(responseCode = "200", description = "List of active products (possibly empty)")
     public ResponseEntity<List<ProductResponse>> getAllProducts() {
+        log.info("Retrieving all products");
         return ResponseEntity.ok(productService.findAllProducts().stream()
                 .map(productResponseMapper::mapToProductResponse)
                 .toList());
@@ -47,6 +50,7 @@ public class ProductController {
     @ApiResponse(responseCode = "400", description = "Validation failed (body uses the default Spring Boot error format)",
             content = @Content)
     public ResponseEntity<ProductResponse> createProduct(@RequestBody @Valid ProductRequest product) {
+        log.info("Creating product {}", product);
         return ResponseEntity.status(HttpStatus.CREATED).body(productResponseMapper.mapToProductResponse(productService.createProduct(product)));
     }
 
@@ -56,6 +60,7 @@ public class ProductController {
     @ApiResponse(responseCode = "200", description = "Product found")
     @ApiResponse(responseCode = "404", description = "No active product with this id", content = @Content)
     public ResponseEntity<ProductResponse> getProductById(@Parameter(description = "Product id") @PathVariable Long id) {
+        log.info("Retrieving product with id {}", id);
         return productService.findProductById(id)
                 .map(productResponseMapper::mapToProductResponse)
                 .map(ResponseEntity::ok)
@@ -72,6 +77,7 @@ public class ProductController {
     @ApiResponse(responseCode = "404", description = "No product with this id", content = @Content)
     public ResponseEntity<ProductResponse> updateProduct(@Parameter(description = "Product id") @PathVariable Long id,
                                                          @RequestBody @Valid ProductRequest product) {
+        log.info("Updating product with id {} to {}", id, product);
         return ResponseEntity.status(HttpStatus.OK).body(productResponseMapper.mapToProductResponse(productService.updateProduct(id, product)));
     }
 
@@ -81,6 +87,7 @@ public class ProductController {
     @ApiResponse(responseCode = "204", description = "Product deleted")
     @ApiResponse(responseCode = "404", description = "No product with this id", content = @Content)
     public ResponseEntity<Void> deleteProduct(@Parameter(description = "Product id") @PathVariable Long id) {
+        log.info("Deleting product with id {}", id);
         productService.deleteProduct(id);
         return ResponseEntity.noContent().build();
     }
@@ -93,9 +100,12 @@ public class ProductController {
             content = @Content)
     public ResponseEntity<List<ProductResponse>> searchProducts(
             @Parameter(description = "Substring to look for in the product name", required = true) @RequestParam String name) {
+        log.info("Searching products with name {}", name);
         List<Product> products = productService.searchProducts(name);
-        if(products.isEmpty())
+        if(products.isEmpty()) {
+            log.info("No products found with name {}", name);
             return ResponseEntity.notFound().build();
+        }
         return ResponseEntity.ok(products.stream()
                 .map(productResponseMapper::mapToProductResponse)
                 .toList());

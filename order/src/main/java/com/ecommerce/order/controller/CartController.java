@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/cart")
+@Slf4j
 @Tag(name = "Cart", description = "Shopping cart of the user identified by the X-User-ID header")
 public class CartController {
 
@@ -50,6 +52,7 @@ public class CartController {
             @RequestHeader("X-User-ID") String userId,
             @RequestBody @Valid CartItemRequest cartItemRequest
     ) {
+        log.info("Adding product {} to cart of user {}", cartItemRequest.getProductId(), userId);
         cartService.addToCart(userId, cartItemRequest);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
@@ -66,6 +69,7 @@ public class CartController {
     public ResponseEntity<Void> removeFromCart(@Parameter(in = ParameterIn.HEADER, description = USER_ID_HEADER_DESCRIPTION, required = true)
                                                @RequestHeader("X-User-ID") String userId,
                                                @Parameter(description = "Product id") @PathVariable Long productId) {
+        log.info("Removing product {} from cart of user {}", productId, userId);
         cartService.removeFromCart(userId, productId);
         return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
     }
@@ -79,6 +83,7 @@ public class CartController {
                     schema = @Schema(type = "string", example = "User not found")))
     public ResponseEntity<List<CartItemResponse>> getCartForUser(@Parameter(in = ParameterIn.HEADER, description = USER_ID_HEADER_DESCRIPTION, required = true)
                                                                  @RequestHeader("X-User-ID") String userId) {
+        log.info("Getting cart of user {}", userId);
         return cartService.getUserCartItems(userId)
                 .map(cartItems -> ResponseEntity.ok(cartItems.stream().map(CartItemResponseMapper::toCartItemResponse).toList()))
                 .orElse(ResponseEntity.status(HttpStatus.NO_CONTENT).build());

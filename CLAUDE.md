@@ -14,7 +14,7 @@ E-commerce backend split into Spring Boot microservices. Each module is an **ind
 | `user/` | `user-service` | 8082 | MongoDB | `/api/v1/users` |
 | `order/` | `order-service` | 8083 | PostgreSQL (JPA + Flyway, schema `order_service` in db `postgres`) | `/api/v1/cart`, `/api/v1/orders` |
 
-Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus, Netflix Eureka client + LoadBalancer), Lombok, Spring Security, Actuator, Jackson 3 (`tools.jackson.*`), JUnit 5 + Mockito, Testcontainers. Base package: `com.ecommerce.<module>`.
+Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus, Netflix Eureka client + LoadBalancer), Lombok, Spring Security, Actuator, springdoc-openapi (Swagger UI), Micrometer (Prometheus registry, Tracing with the Brave bridge + Zipkin reporter), Jackson 3 (`tools.jackson.*`), JUnit 5 + Mockito, Testcontainers. Base package: `com.ecommerce.<module>`.
 
 ### Configuration
 - Services only contain `spring.application.name` and `spring.config.import: optional:configserver:http://localhost:8888` locally. **Real config lives in `config-server/src/main/resources/config/<application-name>.yml`** — edit there, not in the service.
@@ -27,16 +27,36 @@ Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus, Netflix E
   - user: `MONGODB_URI` (defaults to `mongodb://localhost:27017/user`)
 - `sql/properties.sql` + root `Dockerfile` are for the (inactive) JDBC config backend.
 
-### Local infrastructure (`docker-compose.yaml`)
-PostgreSQL 15 (5432), pgAdmin (5050), RabbitMQ + management (5672/15672), Prometheus (9090), Grafana (3000).
+### Local infrastructure (root `docker-compose.yaml`)
+PostgreSQL 16 (5432), pgAdmin (5050), RabbitMQ + management (5672/15672). Prometheus, Grafana and Zipkin live in the `loki/` stack.
 - MongoDB / mongo-express are **commented out**, but `user-service` needs MongoDB.
 - order-service needs no manual DB setup: Flyway creates the `order_service` schema and applies `order/src/main/resources/db/migration` at startup; Hibernate runs with `ddl-auto: validate`. Schema changes go in a new `V<n>__*.sql` migration, never by editing an applied one.
-- `prometheus.yml` scrapes `host.docker.internal:8080`, which matches no current service port.
+
+### Observability stack (`loki/docker-compose.yaml`, run from `loki/`)
+Loki in simple-scalable mode (`read`/`write`/`backend` behind the nginx `gateway` on 3100), Alloy (12345), Prometheus (9090), Grafana (3000, anonymous admin), Zipkin (9411), `flog` (fake log generator).
+- **Loki storage is `filesystem`** (no MinIO/S3): `read`, `write` and `backend` share the named volume `loki-data` mounted on `/loki`. If they get out of sync, the fallback is a single `-target=all` container (and pointing the gateway at it).
+- Loki is multi-tenant (`auth_enabled` unset): Alloy pushes with `tenant_id = "tenant1"` and Grafana's Loki datasource sends `X-Scope-OrgID: tenant1`. Keep them equal.
+- Alloy tails the services' log files through `../logs:/logs-parent` (repo-root `logs/`), plus Docker container logs.
+- `loki/prometheus.yml` scrapes `/actuator/prometheus` on `host.docker.internal:8081/8082/8083` (label `application`). All three services include `micrometer-registry-prometheus`.
+- Grafana datasources are provisioned from `loki/datasources/datasources.yml` (read only at startup: `docker compose up -d --force-recreate grafana`): Loki (`http://gateway:3100`) and Prometheus (`http://prometheus:9090`, **fixed `uid: prometheus`**, default).
+- Dashboards are **imported through the UI** (no dashboard provisioning) and stored in the named volume `grafana-data` (`/var/lib/grafana`): they survive `--force-recreate`, not `docker compose down -v`.
+  - Grafana.com dashboards (e.g. 4701 "JVM (Micrometer)") reference `${DS_PROMETHEUS}`. If the import form does not ask for the datasource, panels show `Data source not found`: in Dashboard settings → JSON Model, replace every `${DS_PROMETHEUS}` with `prometheus`, then save.
+  - Some 4701 panels stay empty by design: Load, File Descriptors, Threads (not provided on Windows), Process Memory (needs an extra library), Tomcat (needs `server.tomcat.mbeanregistry.enabled: true`), Jetty (not used), Errors (until a request fails).
+
+### Distributed tracing (Zipkin)
+- product/user/order depend on `spring-boot-starter-zipkin` + `micrometer-tracing-bridge-brave`; spans go to Zipkin's default endpoint `http://localhost:9411/api/v2/spans` (no `management.zipkin` setting). `management.tracing.sampling.probability: 1.0` in each config-server file (every request is traced; lower it outside local dev).
+- Each service has `config/ObservationConfig`: an `ObservationPredicate` that drops `/actuator/**` server requests (Prometheus scrapes every 3 s and would flood Zipkin) and `spring.security.*` observations that have no parent (otherwise they become one-span root traces once their actuator request is dropped). Side effect: no `http_server_requests` metric for `/actuator/**`. Covered by `ObservationConfigTest`.
+- Zipkin UI shows only the 10 most recent traces by default: filter on `serviceName` / `spanName` to find a request.
+- **Known gap**: order → product/user calls are not in the same trace. In `order/config/ObservatoryConfiguration`, the trace-propagation interceptor sits on the plain `@Primary` builder (used by Eureka), while `ProductClient`/`UserClient` use the `@LoadBalanced` builder, created without `observationRegistry`. Fix: `RestClient.builder().observationRegistry(observationRegistry)` on the load-balanced builder (the manual interceptor then becomes unnecessary).
+
+### Logging (config-server files)
+Each service writes `logs/<application-name>.log`, relative to the working directory it was started from (repo root → `logs/`, the path Alloy reads). `logging.logback.rollingpolicy.file-name-pattern` **must contain `%i`** (size + date rotation); without it Logback fails and the service writes no log file.
 
 ### Commands
 Run from inside a module directory (`cd order`, etc.):
 ```bash
 docker compose up -d          # from repo root: infra
+docker compose up -d          # from loki/: observability (Loki, Alloy, Prometheus, Grafana, Zipkin)
 ./mvnw spring-boot:run        # start config-server and eureka first, then services
 ./mvnw test                   # unit + integration tests (Docker required for Testcontainers)
 ./mvnw -Dtest=CartServiceTest test   # single test class
@@ -56,7 +76,7 @@ On Windows PowerShell use `.\mvnw.cmd`.
 
 ### Inter-service calls (`order` → `product`, `user`)
 - Spring HTTP interfaces (`@HttpExchange`): `clients/ProductClient` (`GET /api/v1/products/{id}`) and `users/UserClient` (`GET /api/v1/users/{id}`). Parameters need `@PathVariable`.
-- Built in `config/ProductClientConfig` / `config/UserClientConfig` from a `@LoadBalanced RestClient.Builder` with Eureka names as base URL (`http://PRODUCT-SERVICE`, `http://USER-SERVICE`). `ProductClientConfig` also declares a **plain `@Primary` builder**: keep it, otherwise the Eureka client picks up the load-balanced builder and fails to register ("No instances available for localhost"). Inject the load-balanced one with `@LoadBalanced RestClient.Builder`.
+- Built in `config/ProductClientConfig` / `config/UserClientConfig` from a `@LoadBalanced RestClient.Builder` with Eureka names as base URL (`http://PRODUCT-SERVICE`, `http://USER-SERVICE`). Both builders are declared in `config/ObservatoryConfiguration`, including a **plain `@Primary` builder**: keep it, otherwise the Eureka client picks up the load-balanced builder and fails to register ("No instances available for localhost"). Inject the load-balanced one with `@LoadBalanced RestClient.Builder`.
 - DTOs deserialized from remote responses (`ProductResponse`, `UserResponse`, `AddressDTO`) need `@NoArgsConstructor` + `@AllArgsConstructor` next to `@Builder`, or Jackson fails (`RemoteResponseDeserializationTest`).
 - A remote 404 throws `HttpClientErrorException.NotFound` (not an empty `Optional`). `CartServiceImpl.findActiveProduct` / `findUser` turn it into `Optional.empty()`; other remote errors propagate (→ 500). product-service's `GET /{id}` returns 404 for inactive products; `findActiveProduct` still filters on `active` as a safeguard. `ProductNotFoundException` / `UserNotFoundException` → **404**.
 - Which operations call which service:
@@ -76,8 +96,7 @@ On Windows PowerShell use `.\mvnw.cmd`.
 - Method names: `method_shouldDoXWhenY`; bodies structured with `//given`, `//when`, `//then`.
 
 ### Repo notes
-- Root `README.md` and `HELP.md` describe the Claude Code toolkit, not the application.
-- `eureka/` is not tracked by git yet.
+- Root `README.md` describes the application (architecture, setup, API, observability, history). The Claude Code toolkit (skills, agents) lives in `.claude/`, documented in `.claude/README.md`.
 - `config-server/src/main/resources/config-server.jks` is a keystore: do not read or reproduce its contents.
 
 ## First-session workflow
