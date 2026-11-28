@@ -52,11 +52,13 @@ public class ObservatoryConfiguration {
         });
     }
 
-    // builder load-balancé (résolution des noms Eureka), réservé à ProductClient et UserClient
+    // builder load-balancé (résolution des noms Eureka), réservé à ProductClient et UserClient.
+    // observationRegistry : chaque appel devient un span enfant de la requête en cours et les en-têtes
+    // de trace sont propagés, donc order → product/user apparaissent dans la même trace.
     @Bean
     @LoadBalanced
     public RestClient.Builder loadBalancedRestClientBuilder() {
-        return RestClient.builder();
+        return RestClient.builder().observationRegistry(observationRegistry);
     }
 
 

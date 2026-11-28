@@ -10,6 +10,7 @@ E-commerce backend split into Spring Boot microservices. Each module is an **ind
 |---|---|---|---|---|
 | `config-server/` | `config-server` | 8888 | — (serves config) | — |
 | `eureka/` | `eureka` | 8761 | — (service registry, Eureka server) | — |
+| `gateway/` | `gateway` | 8080 | — (Spring Cloud Gateway, WebFlux; work in progress) | routes to the three services |
 | `product/` | `product-service` | 8081 | PostgreSQL (JPA) | `/api/v1/products` |
 | `user/` | `user-service` | 8082 | MongoDB | `/api/v1/users` |
 | `order/` | `order-service` | 8083 | PostgreSQL (JPA + Flyway, schema `order_service` in db `postgres`) | `/api/v1/cart`, `/api/v1/orders` |
@@ -20,6 +21,7 @@ Stack: Java 21, Spring Boot 4.1.2, Spring Cloud 2025.1.4 (Config, Bus, Netflix E
 - Services only contain `spring.application.name` and `spring.config.import: optional:configserver:http://localhost:8888` locally. **Real config lives in `config-server/src/main/resources/config/<application-name>.yml`** — edit there, not in the service.
 - Config server uses the `native` profile with an **absolute Windows path** in `config-server/src/main/resources/application.yml`. Git/JDBC backends and encryption are present but commented out.
 - Spring Cloud Bus + RabbitMQ is wired for config refresh.
+- `gateway/` is configured like the services: local `application.yaml` with the name + config import, real config in `config-server/.../config/gateway.yml` (port, tracing sampling, optional YAML routes).
 - `eureka/` keeps its own `application.yml` (not served by config-server). product/user/order register with it via `eureka.client.service-url.defaultZone: http://localhost:8761/eureka/` in their config-server files.
 - Environment variables expected (never hardcode values):
   - order: `DB_USERNAME`, `DB_PASSWORD`
@@ -45,9 +47,22 @@ Loki in simple-scalable mode (`read`/`write`/`backend` behind the nginx `gateway
 
 ### Distributed tracing (Zipkin)
 - product/user/order depend on `spring-boot-starter-zipkin` + `micrometer-tracing-bridge-brave`; spans go to Zipkin's default endpoint `http://localhost:9411/api/v2/spans` (no `management.zipkin` setting). `management.tracing.sampling.probability: 1.0` in each config-server file (every request is traced; lower it outside local dev).
-- Each service has `config/ObservationConfig`: an `ObservationPredicate` that drops `/actuator/**` server requests (Prometheus scrapes every 3 s and would flood Zipkin) and `spring.security.*` observations that have no parent (otherwise they become one-span root traces once their actuator request is dropped). Side effect: no `http_server_requests` metric for `/actuator/**`. Covered by `ObservationConfigTest`.
+- Each service has `config/ObservationConfig`: an `ObservationPredicate` that drops `/actuator/**` server requests (Prometheus scrapes every 3 s and would flood Zipkin) and `spring.security.*` observations that have no parent or a noop parent (a skipped observation stays in scope as a noop; otherwise they become one-span root traces once their actuator request is dropped). It also drops client calls to the Eureka server (`/eureka/**`: heartbeat + registry fetch every 30 s); `gateway/config/ObservationConfig` does the same for the gateway. The Eureka client uses `RestClient` (WebClient only with `eureka.client.webclient.enabled=true`). Side effect: no `http_server_requests` metric for `/actuator/**` and no `http_client_requests` metric for Eureka calls. Covered by `ObservationConfigTest`.
+- Gateway: `management.tracing.sampling.probability: 1.0` in `gateway.yml` is required — the gateway's sampling decision is propagated downstream, so the default 0.1 would leave 9 out of 10 gateway requests untraced in every service. Gateway → service propagation is done by `ObservedRequestHttpHeadersFilter`, created only when `spring-boot-starter-actuator` is present (`GatewayMetricsAutoConfiguration` is `@ConditionalOnClass(MeterRegistry)`): without actuator, the gateway and the services produce separate traces.
 - Zipkin UI shows only the 10 most recent traces by default: filter on `serviceName` / `spanName` to find a request.
-- **Known gap**: order → product/user calls are not in the same trace. In `order/config/ObservatoryConfiguration`, the trace-propagation interceptor sits on the plain `@Primary` builder (used by Eureka), while `ProductClient`/`UserClient` use the `@LoadBalanced` builder, created without `observationRegistry`. Fix: `RestClient.builder().observationRegistry(observationRegistry)` on the load-balanced builder (the manual interceptor then becomes unnecessary).
+- order → product/user calls are in the same trace: in `order/config/ObservatoryConfiguration` the `@LoadBalanced` builder is created with `.observationRegistry(observationRegistry)` (client span as child of the current request + header propagation), covered by `ObservatoryConfigurationTest`. Builders created with a bare `RestClient.builder()` are not observed (Boot's auto-configured builder is not used here). The manual Tracer/Propagator interceptor on the `@Primary` builder only affects non-load-balanced calls (Eureka, whose calls are dropped by `ObservationConfig`).
+
+### API gateway (`gateway/`)
+- Spring Cloud Gateway **server WebFlux** 5.1.0 on **Spring Boot 4.2.0** (the other modules are on 4.1.2), Eureka client, config client, actuator, Zipkin. Not covered by the 100 % coverage figure.
+- Routes can be declared in two places — **keep only one active**:
+  - Java: `config/GatewayConfig` (`RouteLocator` bean);
+  - YAML: `spring.cloud.gateway.server.webflux.routes` in `config/gateway.yml` on the config-server.
+  - **Active: the YAML routes.** `GatewayConfig` is kept for reference but disabled (`@Configuration`/`@Bean` commented out) — do not delete it, do not re-enable it alongside the YAML.
+- Route targets use Eureka names: `lb://PRODUCT-SERVICE`, `lb://USER-SERVICE`, `lb://ORDER-SERVICE`; `/eureka/main` (SetPath `/`) and `/eureka/**` go to `http://localhost:8761`.
+- Public paths are **short** (`/products/**`, `/users/**`, `/orders/**`, `/cart/**`) and rewritten to `/api/v1/...`; `/api/v1/...` is not routed by the gateway. For the rewrite, **the `/` must be inside the captured group**: `RewritePath=/products(?<segment>/?.*), /api/v1/products${segment}`. With `/products/(?<segment>/?.*)`, `/products` is not rewritten (the service answers 403, see below) and `/products/12` becomes `/api/v1/products12`.
+- `GatewayConfigTest` loads the routes straight from the config-server file (`spring.config.import=file:../config-server/src/main/resources/config/gateway.yml`, config client and Eureka disabled — no running config-server needed), picks the matching route from the real `RouteLocator`, applies its filters and asserts the forwarded path. It fails if the YAML routes are commented out or a rewrite is wrong; update it with the routes. Run it from `gateway/` (relative path).
+- `filter/JwtAuthFilter` (`WebFilter`, rejects requests without `Bearer` token, validation TODO) and `filter/LoggingFilter` (`GlobalFilter`) exist but are disabled (`@Component` commented).
+- Behind the gateway, a path that no service maps returns **403, not 404**: Spring forwards to `/error`, which is not `permitAll` in the services' `SecurityConfig`. A 403 through the gateway usually means a wrong forwarded path or HTTP method.
 
 ### Logging (config-server files)
 Each service writes `logs/<application-name>.log`, relative to the working directory it was started from (repo root → `logs/`, the path Alloy reads). `logging.logback.rollingpolicy.file-name-pattern` **must contain `%i`** (size + date rotation); without it Logback fails and the service writes no log file.
@@ -57,7 +72,7 @@ Run from inside a module directory (`cd order`, etc.):
 ```bash
 docker compose up -d          # from repo root: infra
 docker compose up -d          # from loki/: observability (Loki, Alloy, Prometheus, Grafana, Zipkin)
-./mvnw spring-boot:run        # start config-server and eureka first, then services
+./mvnw spring-boot:run        # start config-server and eureka first, then services (gateway last, optional)
 ./mvnw test                   # unit + integration tests (Docker required for Testcontainers)
 ./mvnw -Dtest=CartServiceTest test   # single test class
 ./mvnw clean package
@@ -72,7 +87,7 @@ On Windows PowerShell use `.\mvnw.cmd`.
 - Errors: domain exceptions in `exception/` mapped by a module-level `@RestControllerAdvice GlobalExceptionHandler`.
 - Auditing via `AuditConfig` + `AuditorAwareImpl` (falls back to `"system"`).
 - Security: each module has a `SecurityConfig`; API and actuator paths are currently `permitAll`, CSRF disabled.
-- Order/cart endpoints identify the user with the `X-User-ID` request header, a **`String`** (user-service MongoDB id). `order` stores `userId` as `String` (`varchar`, migration `V2`) and `productId` as `Long`; old cross-module JPA code is left commented out.
+- Order/cart endpoints identify the user with the `X-User-ID` request header, a **`String`** (user-service MongoDB id). When debugging a "user not found" 404, check the value actually received: `OrderController` logs `Placing order for user <id>`, and the Zipkin client span shows the id sent to user-service. `order` stores `userId` as `String` (`varchar`, migration `V2`) and `productId` as `Long`; old cross-module JPA code is left commented out.
 
 ### Inter-service calls (`order` → `product`, `user`)
 - Spring HTTP interfaces (`@HttpExchange`): `clients/ProductClient` (`GET /api/v1/products/{id}`) and `users/UserClient` (`GET /api/v1/users/{id}`). Parameters need `@PathVariable`.
